@@ -19,10 +19,16 @@ func main() {
 	r := gin.Default()
 	routes.SetupRoutes(r)
 
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "🚀 Go API with PostgreSQL is running successfully!",
+		})
+	})
+
 	port := os.Getenv("PORT")
-if port == "" {
-    port = "8080"
-}
-r.Run(":" + port)
+	if port == "" {
+		port = "8080"
+	}
+	r.Run(":" + port)
 
 }
