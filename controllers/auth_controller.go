@@ -69,8 +69,17 @@ func Login(c *gin.Context) {
 }
 
 func GetAllUsers(c *gin.Context) {
+	// Ambil ID admin yang sedang login dari JWT middleware
+	adminID, _ := c.Get("user_id")
+
+	// var users []models.User
+	// if err := config.DB.Find(&users).Error; err != nil {
+	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data pengguna"})
+	// 	return
+	// }
 	var users []models.User
-	if err := config.DB.Find(&users).Error; err != nil {
+	// Cari semua user kecuali ID admin sendiri
+	if err := config.DB.Where("id != ?", adminID).Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data pengguna"})
 		return
 	}
@@ -80,3 +89,33 @@ func GetAllUsers(c *gin.Context) {
 		"data":        users,
 	})
 }
+
+func Profile(c *gin.Context) {
+	// Ambil token dari header Authorization: Bearer <token>
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Token tidak ditemukan"})
+		return
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
+	claims, err := utils.VerifyToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Token tidak valid"})
+		return
+	}
+
+	// Ambil user dari DB
+	var user models.User
+	if err := config.DB.First(&user, claims["user_id"]).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"nama": user.Nama,
+		"role": user.Role,
+	})
+}
+
