@@ -20,17 +20,17 @@ func CreateGrupBarang(c *gin.Context) {
         return
     }
 
-    kodeGrup := models.GrupBarang{
+    grupBarang := models.GrupBarang{
         Nama: input.Nama,
         Kode: input.Kode,
     }
 
-    if err := config.DB.Create(&kodeGrup).Error; err != nil {
+    if err := config.DB.Create(&grupBarang).Error; err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{"message": "Kode grup berhasil ditambahkan", "data": kodeGrup})
+    c.JSON(http.StatusOK, gin.H{"message": "Kode grup berhasil ditambahkan", "data": grupBarang})
 }
 
 func GetAllGrupBarang(c *gin.Context) {

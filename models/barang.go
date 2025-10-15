@@ -5,7 +5,7 @@ import "gorm.io/gorm"
 type Barang struct {
 	gorm.Model
 	Nama         string     `json:"nama"`
-	Kode         string     `json:"kode" gorm:"unique"`
+	Kode         string     `json:"kode"`
 	GudangID     uint       `json:"gudang_id"`                         // foreign key ke Gudang
 	Gudang       Gudang     `gorm:"foreignKey:GudangID" json:"gudang"` // preload
 	LokasiSusun  string     `json:"lokasi_susun"`

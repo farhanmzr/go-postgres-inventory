@@ -31,6 +31,13 @@ func CreateBarang(c *gin.Context) {
 		return
 	}
 
+	// Cek apakah kode barang sudah ada
+	var exist models.Barang
+	if err := config.DB.Where("kode = ?", input.Kode).First(&exist).Error; err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Kode barang sudah digunakan"})
+		return
+	}
+
 	barang := models.Barang{
 		Nama:         input.Nama,
 		Kode:         input.Kode,
@@ -53,7 +60,7 @@ func CreateBarang(c *gin.Context) {
 	}
 
 	// Ambil lagi dari DB dengan Preload
-	if err := config.DB.Preload("Gudang").Preload("KodeGrup").First(&barang, barang.ID).Error; err != nil {
+	if err := config.DB.Preload("Gudang").Preload("GrupBarang").First(&barang, barang.ID).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -63,7 +70,7 @@ func CreateBarang(c *gin.Context) {
 
 func GetAllBarang(c *gin.Context) {
 	var barangs []models.Barang
-	if err := config.DB.Preload("Gudang").Preload("KodeGrup").Find(&barangs).Error; err != nil {
+	if err := config.DB.Preload("Gudang").Preload("GrupBarang").Find(&barangs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -80,7 +87,7 @@ func GetBarangByID(c *gin.Context) {
 	}
 
 	var barang models.Barang
-	if err := config.DB.Preload("Gudang").Preload("KodeGrup").First(&barang, id).Error; err != nil {
+	if err := config.DB.Preload("Gudang").Preload("GrupBarang").First(&barang, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Barang tidak ditemukan"})
 		return
 	}
@@ -113,11 +120,22 @@ func UpdateBarang(c *gin.Context) {
 		GrupBarangID uint    `json:"grup_barang_id"`
 		HargaBeli    float64 `json:"harga_beli"`
 		HargaJual    float64 `json:"harga_jual"`
+		Stok         int     `json:"stok"`
+		StokMinimal  int     `json:"stok_minimal"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Data tidak valid"})
 		return
+	}
+
+	// Optional: cek kode baru tidak duplikat
+	if input.Kode != barang.Kode {
+		var exist models.Barang
+		if err := config.DB.Where("kode = ?", input.Kode).First(&exist).Error; err == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Kode barang sudah digunakan"})
+			return
+		}
 	}
 
 	updateData := models.Barang{
@@ -131,12 +149,17 @@ func UpdateBarang(c *gin.Context) {
 		GrupBarangID: input.GrupBarangID,
 		HargaBeli:    input.HargaBeli,
 		HargaJual:    input.HargaJual,
+		Stok:         input.Stok,
+		StokMinimal:  input.StokMinimal,
 	}
 
 	if err := config.DB.Model(&barang).Updates(updateData).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	config.DB.Preload("Gudang").Preload("GrupBarang").First(&barang, barang.ID)
+
 
 	c.JSON(http.StatusOK, gin.H{"message": "Barang berhasil diupdate", "data": barang})
 }
