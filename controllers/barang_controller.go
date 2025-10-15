@@ -12,16 +12,18 @@ import (
 
 func CreateBarang(c *gin.Context) {
 	var input struct {
-		Nama        string  `json:"nama"`
-		Kode        string  `json:"kode"`
-		GudangID    uint    `json:"gudang_id"`
-		LokasiSusun string  `json:"lokasi_susun"`
-		Satuan      string  `json:"satuan"`
-		Merek       string  `json:"merek"`
-		MadeIn      string  `json:"made_in"`
-		KodeGrupID  uint    `json:"kode_grup_id"`
-		HargaBeli   float64 `json:"harga_beli"`
-		HargaJual   float64 `json:"harga_jual"`
+		Nama         string  `json:"nama"`
+		Kode         string  `json:"kode"`
+		GudangID     uint    `json:"gudang_id"`
+		LokasiSusun  string  `json:"lokasi_susun"`
+		Satuan       string  `json:"satuan"`
+		Merek        string  `json:"merek"`
+		MadeIn       string  `json:"made_in"`
+		GrupBarangID uint    `json:"grup_barang_id"`
+		HargaBeli    float64 `json:"harga_beli"`
+		HargaJual    float64 `json:"harga_jual"`
+		Stok         int     `json:"stok"`
+		StokMinimal  int     `json:"stok_minimal"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -30,19 +32,28 @@ func CreateBarang(c *gin.Context) {
 	}
 
 	barang := models.Barang{
-		Nama:        input.Nama,
-		Kode:        input.Kode,
-		GudangID:    input.GudangID,
-		LokasiSusun: input.LokasiSusun,
-		Satuan:      input.Satuan,
-		Merek:       input.Merek,
-		MadeIn:      input.MadeIn,
-		KodeGrupID:  input.KodeGrupID,
-		HargaBeli:   input.HargaBeli,
-		HargaJual:   input.HargaJual,
+		Nama:         input.Nama,
+		Kode:         input.Kode,
+		GudangID:     input.GudangID,
+		LokasiSusun:  input.LokasiSusun,
+		Satuan:       input.Satuan,
+		Merek:        input.Merek,
+		MadeIn:       input.MadeIn,
+		GrupBarangID: input.GrupBarangID,
+		HargaBeli:    input.HargaBeli,
+		HargaJual:    input.HargaJual,
+		Stok:         input.Stok,
+		StokMinimal:  input.StokMinimal,
 	}
 
+	// Simpan ke DB
 	if err := config.DB.Create(&barang).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Ambil lagi dari DB dengan Preload
+	if err := config.DB.Preload("Gudang").Preload("KodeGrup").First(&barang, barang.ID).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -92,16 +103,16 @@ func UpdateBarang(c *gin.Context) {
 	}
 
 	var input struct {
-		Nama        string  `json:"nama"`
-		Kode        string  `json:"kode"`
-		GudangID    uint    `json:"gudang_id"`
-		LokasiSusun string  `json:"lokasi_susun"`
-		Satuan      string  `json:"satuan"`
-		Merek       string  `json:"merek"`
-		MadeIn      string  `json:"made_in"`
-		KodeGrupID  uint    `json:"kode_grup_id"`
-		HargaBeli   float64 `json:"harga_beli"`
-		HargaJual   float64 `json:"harga_jual"`
+		Nama         string  `json:"nama"`
+		Kode         string  `json:"kode"`
+		GudangID     uint    `json:"gudang_id"`
+		LokasiSusun  string  `json:"lokasi_susun"`
+		Satuan       string  `json:"satuan"`
+		Merek        string  `json:"merek"`
+		MadeIn       string  `json:"made_in"`
+		GrupBarangID uint    `json:"grup_barang_id"`
+		HargaBeli    float64 `json:"harga_beli"`
+		HargaJual    float64 `json:"harga_jual"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -110,16 +121,16 @@ func UpdateBarang(c *gin.Context) {
 	}
 
 	updateData := models.Barang{
-		Nama:        input.Nama,
-		Kode:        input.Kode,
-		GudangID:    input.GudangID,
-		LokasiSusun: input.LokasiSusun,
-		Satuan:      input.Satuan,
-		Merek:       input.Merek,
-		MadeIn:      input.MadeIn,
-		KodeGrupID:  input.KodeGrupID,
-		HargaBeli:   input.HargaBeli,
-		HargaJual:   input.HargaJual,
+		Nama:         input.Nama,
+		Kode:         input.Kode,
+		GudangID:     input.GudangID,
+		LokasiSusun:  input.LokasiSusun,
+		Satuan:       input.Satuan,
+		Merek:        input.Merek,
+		MadeIn:       input.MadeIn,
+		GrupBarangID: input.GrupBarangID,
+		HargaBeli:    input.HargaBeli,
+		HargaJual:    input.HargaJual,
 	}
 
 	if err := config.DB.Model(&barang).Updates(updateData).Error; err != nil {
