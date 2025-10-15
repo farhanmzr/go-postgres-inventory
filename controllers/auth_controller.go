@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"strings"
 
 	"go-postgres-inventory/config"
 	"go-postgres-inventory/models"
