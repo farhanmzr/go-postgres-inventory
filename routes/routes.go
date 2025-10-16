@@ -49,6 +49,17 @@ func SetupRoutes(r *gin.Engine) {
 			grupBarang.DELETE("/:id", middlewares.AdminOnly(), controllers.DeleteGrupBarang)
 		}
 
+		supplier := api.Group("/supplier", middlewares.AuthMiddleware())
+		{
+			supplier.GET("/", controllers.GetAllSupplier)
+			supplier.GET("/:id", controllers.GetSupplierByID)
+
+			// Hanya admin yang boleh CRUD
+			supplier.POST("/", middlewares.AdminOnly(), controllers.CreateSupplier)
+			supplier.PUT("/:id", middlewares.AdminOnly(), controllers.UpdateSupplier)
+			supplier.DELETE("/:id", middlewares.AdminOnly(), controllers.DeleteSupplier)
+		}
+
 		pembelian := api.Group("/pembelian")
 		{
 			// user membuat pembelian

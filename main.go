@@ -15,7 +15,7 @@ func main() {
 
 	// Auto migrate semua model
 	config.DB.AutoMigrate(&models.User{}, &models.Barang{}, &models.Gudang{},
-	&models.GrupBarang{})
+	&models.GrupBarang{}, &models.Supplier{})
 
 	r := gin.Default()
 	routes.SetupRoutes(r)
