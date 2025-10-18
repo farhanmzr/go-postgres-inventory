@@ -13,6 +13,7 @@ import (
 
 func main() {
 	config.ConnectDB()
+	config.SeedPermissions()
 
 	// Auto-migrate models (ADMIN & USER terpisah + PERMISSIONS)
 	config.DB.AutoMigrate(
