@@ -4,6 +4,7 @@ import (
 	"go-postgres-inventory/config"
 	"go-postgres-inventory/models"
 	"go-postgres-inventory/routes"
+	"go-postgres-inventory/utils"
 
 	"os"
 
@@ -13,23 +14,37 @@ import (
 func main() {
 	config.ConnectDB()
 
-	// Auto migrate semua model
-	config.DB.AutoMigrate(&models.User{}, &models.Barang{}, &models.Gudang{},
-	&models.GrupBarang{}, &models.Supplier{})
+	// Auto-migrate models (ADMIN & USER terpisah + PERMISSIONS)
+	config.DB.AutoMigrate(
+		&models.Admin{},
+		&models.User{},
+		&models.Permission{},
+		&models.UserPermission{},
+		&models.Barang{},
+		&models.Gudang{},
+		&models.GrupBarang{},
+		&models.Supplier{},
+	)
+
+	// override secret dari ENV (Render)
+	if s := os.Getenv("ADMIN_JWT_SECRET"); s != "" {
+		utils.AdminSecret = []byte(s)
+	}
+	if s := os.Getenv("USER_JWT_SECRET"); s != "" {
+		utils.UserSecret = []byte(s)
+	}
 
 	r := gin.Default()
 	routes.SetupRoutes(r)
 
 	r.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "🚀 Go API with PostgreSQL is running successfully!",
-		})
+		c.JSON(200, gin.H{"message": "🚀 Inventory API is running"})
 	})
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	r.Run(":" + port)
+	_ = r.Run(":" + port)
 
 }

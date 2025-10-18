@@ -10,67 +10,74 @@ import (
 func SetupRoutes(r *gin.Engine) {
 	api := r.Group("/api")
 	{
-		api.POST("/register", controllers.Register)
-		api.POST("/login", controllers.Login)
-		api.GET("/profile", controllers.Profile)
 
-		api.GET("/users", middlewares.AuthMiddleware(), middlewares.AdminOnly(), controllers.GetAllUsers)
-
-		barang := api.Group("/barang", middlewares.AuthMiddleware())
+		// ================= ADMIN APP =================
+		admin := api.Group("/admin")
 		{
-			barang.GET("/", controllers.GetAllBarang)
-			barang.GET("/:id", controllers.GetBarangByID)
+			admin.POST("/register", controllers.AdminRegister)
+			admin.POST("/login", controllers.AdminLogin)
+			
 
-			// Hanya admin yang boleh CRUD
-			barang.POST("/", middlewares.AdminOnly(), controllers.CreateBarang)
-			barang.PUT("/:id", middlewares.AdminOnly(), controllers.UpdateBarang)
-			barang.DELETE("/:id", middlewares.AdminOnly(), controllers.DeleteBarang)
+			// Semua di bawah butuh token admin
+			adminAuth := admin.Group("/", middlewares.AdminAuth())
+
+			// Manajemen user operasional
+			adminAuth.GET("/users", controllers.AdminGetAllUsers)
+			adminAuth.POST("/users", controllers.AdminCreateUser)
+			adminAuth.PUT("/users/:userID/permissions", controllers.AdminSetUserPermissions)
+
+			// Resource ADMIN lainnya (semua di bawah /api/admin/**)
+			barang := adminAuth.Group("/barang")
+			{
+				barang.GET("/", controllers.GetAllBarang)
+				barang.GET("/:id", controllers.GetBarangByID)
+				barang.POST("/", controllers.CreateBarang)
+				barang.PUT("/:id", controllers.UpdateBarang)
+				barang.DELETE("/:id", controllers.DeleteBarang)
+			}
+
+			gudang := adminAuth.Group("/gudang")
+			{
+				gudang.GET("/", controllers.GetAllGudang)
+				gudang.GET("/:id", controllers.GetGudangByID)
+				gudang.POST("/", controllers.CreateGudang)
+				gudang.PUT("/:id", controllers.UpdateGudang)
+				gudang.DELETE("/:id", controllers.DeleteGudang)
+			}
+
+			grupBarang := adminAuth.Group("/grupbarang")
+			{
+				grupBarang.GET("/", controllers.GetAllGrupBarang)
+				grupBarang.GET("/:id", controllers.GetGrupBarangByID)
+				grupBarang.POST("/", controllers.CreateGrupBarang)
+				grupBarang.PUT("/:id", controllers.UpdateGrupBarang)
+				grupBarang.DELETE("/:id", controllers.DeleteGrupBarang)
+			}
+
+			supplier := adminAuth.Group("/supplier")
+			{
+				supplier.GET("/", controllers.GetAllSupplier)
+				supplier.GET("/:id", controllers.GetSupplierByID)
+				supplier.POST("/", controllers.CreateSupplier)
+				supplier.PUT("/:id", controllers.UpdateSupplier)
+				supplier.DELETE("/:id", controllers.DeleteSupplier)
+			}
 		}
 
-		gudang := api.Group("/gudang", middlewares.AuthMiddleware())
+		// ================= USER APP ==================
+		app := api.Group("/app")
 		{
-			gudang.GET("/", controllers.GetAllGudang)
-			gudang.GET("/:id", controllers.GetGudangByID)
+			app.POST("/login", controllers.UserLogin)
 
-			// Hanya admin yang boleh CRUD
-			gudang.POST("/", middlewares.AdminOnly(), controllers.CreateGudang)
-			gudang.PUT("/:id", middlewares.AdminOnly(), controllers.UpdateGudang)
-			gudang.DELETE("/:id", middlewares.AdminOnly(), controllers.DeleteGudang)
+			appAuth := app.Group("/", middlewares.UserAuth())
+			appAuth.GET("/profile", controllers.UserProfile)
+
+			// contoh endpoint yang butuh permission tertentu:
+			// appAuth.POST("/items", middlewares.RequirePerm("CREATE_ITEM"), controllers.CreateBarangUser)
+			// appAuth.POST("/stock/movements", middlewares.RequirePerm("CONSUMPTION"), controllers.CreatePemakaian)
+			// appAuth.GET("/reports/stock", middlewares.RequirePerm("REPORT_STOCK_VIEW"), controllers.ReportStock)
 		}
 
-		grupBarang := api.Group("/grupbarang", middlewares.AuthMiddleware())
-		{
-			grupBarang.GET("/", controllers.GetAllGrupBarang)
-			grupBarang.GET("/:id", controllers.GetGrupBarangByID)
-
-			// Hanya admin yang boleh CRUD
-			grupBarang.POST("/", middlewares.AdminOnly(), controllers.CreateGrupBarang)
-			grupBarang.PUT("/:id", middlewares.AdminOnly(), controllers.UpdateGrupBarang)
-			grupBarang.DELETE("/:id", middlewares.AdminOnly(), controllers.DeleteGrupBarang)
-		}
-
-		supplier := api.Group("/supplier", middlewares.AuthMiddleware())
-		{
-			supplier.GET("/", controllers.GetAllSupplier)
-			supplier.GET("/:id", controllers.GetSupplierByID)
-
-			// Hanya admin yang boleh CRUD
-			supplier.POST("/", middlewares.AdminOnly(), controllers.CreateSupplier)
-			supplier.PUT("/:id", middlewares.AdminOnly(), controllers.UpdateSupplier)
-			supplier.DELETE("/:id", middlewares.AdminOnly(), controllers.DeleteSupplier)
-		}
-
-		pembelian := api.Group("/pembelian")
-		{
-			// user membuat pembelian
-			pembelian.POST("/", middlewares.AuthMiddleware(), controllers.CreatePembelian)
-
-			// admin melihat semua pembelian
-			pembelian.GET("/", middlewares.AuthMiddleware(), middlewares.AdminOnly(), controllers.GetAllPembelian)
-
-			// admin mengubah status
-			pembelian.PUT("/:id/status", middlewares.AuthMiddleware(), middlewares.AdminOnly(), controllers.UpdatePembelianStatus)
-		}
 
 	}
 }
