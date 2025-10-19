@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"go-postgres-inventory/config"
@@ -21,12 +22,14 @@ type AdminRegisterInput struct {
 func AdminRegister(c *gin.Context) {
 	var in AdminRegisterInput
 	if err := c.ShouldBindJSON(&in); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	var exists models.Admin
 	if err := config.DB.Where("username = ?", in.Username).First(&exists).Error; err == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Username sudah dipakai"}); return
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username sudah dipakai"})
+		return
 	}
 
 	hash, _ := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
@@ -37,8 +40,13 @@ func AdminRegister(c *gin.Context) {
 		IsActive:     true,
 	}
 
+	if admin.AvatarURL == "" {
+		admin.AvatarURL = utils.DefaultAvatar(in.FullName)
+	}
+
 	if err := config.DB.Create(&admin).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat admin"}); return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat admin"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Admin berhasil dibuat", "username": admin.Username})
@@ -53,16 +61,19 @@ type AdminLoginInput struct {
 func AdminLogin(c *gin.Context) {
 	var in AdminLoginInput
 	if err := c.ShouldBindJSON(&in); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	var admin models.Admin
 	if err := config.DB.Where("username = ? AND is_active = true", in.Username).First(&admin).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Admin tidak ditemukan"}); return
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Admin tidak ditemukan"})
+		return
 	}
 
 	if bcrypt.CompareHashAndPassword([]byte(admin.PasswordHash), []byte(in.Password)) != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Password salah"}); return
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Password salah"})
+		return
 	}
 
 	token, _ := utils.GenerateAdminToken(admin.ID, admin.Username, 24*time.Hour)
@@ -72,12 +83,12 @@ func AdminLogin(c *gin.Context) {
 	})
 }
 
-
 // Admin: Get Data Admin
 func GetDataAdminProfile(c *gin.Context) {
 	aid, _ := c.Get("admin_id")
 
 	var admin models.Admin
+
 	if err := config.DB.First(&admin, aid).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"message": "Admin tidak ditemukan",
@@ -86,12 +97,17 @@ func GetDataAdminProfile(c *gin.Context) {
 		return
 	}
 
+	if admin.AvatarURL == "" {
+		admin.AvatarURL = utils.DefaultAvatar(admin.FullName)
+	} else {
+		admin.AvatarURL = utils.CloudinaryThumb256(admin.AvatarURL)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Berhasil mengambil data admin",
 		"data":    admin, // PasswordHash tersembunyi karena json:"-"
 	})
 }
-
 
 // Admin: Update data profile
 type AdminUpdateProfileInput struct {
@@ -104,7 +120,26 @@ type AdminUpdateProfileInput struct {
 }
 
 func AdminUpdateProfile(c *gin.Context) {
-	adminID, _ := c.Get("admin_id")
+	// --- normalisasi admin_id dari context ---
+	rawID, _ := c.Get("admin_id")
+	var adminID uint
+	switch v := rawID.(type) {
+	case uint:
+		adminID = v
+	case int:
+		adminID = uint(v)
+	case int64:
+		adminID = uint(v)
+	case float64:
+		adminID = uint(v)
+	case string:
+		if n, err := strconv.ParseUint(v, 10, 64); err == nil {
+			adminID = uint(n)
+		}
+	default:
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "admin_id tidak valid"})
+		return
+	}
 
 	var admin models.Admin
 	if err := config.DB.First(&admin, adminID).Error; err != nil {
@@ -143,12 +178,15 @@ func AdminUpdateProfile(c *gin.Context) {
 	if in.AvatarURL != nil {
 		updates["avatar_url"] = *in.AvatarURL
 	}
-	updates["updated_at"] = time.Now()
 
+	// tolak kalau memang tidak ada perubahan
 	if len(updates) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Tidak ada data yang diubah"})
 		return
 	}
+
+	// baru set updated_at setelah ada changes
+	updates["updated_at"] = time.Now()
 
 	if err := config.DB.Model(&admin).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -158,10 +196,14 @@ func AdminUpdateProfile(c *gin.Context) {
 		return
 	}
 
-	config.DB.First(&admin, adminID)
+	if err := config.DB.First(&admin, adminID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal memuat ulang profil admin", "error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Profil admin berhasil diperbarui",
-		"data":    admin,
+		"data":    admin, // PasswordHash sudah tersembunyi via json:"-"
 	})
 }
 
@@ -212,12 +254,12 @@ func AdminChangePassword(c *gin.Context) {
 	})
 }
 
-
 // Admin: lihat semua user (contoh endpoint admin)
 func AdminGetAllUsers(c *gin.Context) {
 	var users []models.User
 	if err := config.DB.Find(&users).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal ambil data pengguna"}); return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal ambil data pengguna"})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil semua data Users", "total": len(users), "data": users})
 }
@@ -238,11 +280,13 @@ type CreateUserInput struct {
 func AdminCreateUser(c *gin.Context) {
 	var in CreateUserInput
 	if err := c.ShouldBindJSON(&in); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	var exists models.User
 	if err := config.DB.Where("username = ?", in.Username).First(&exists).Error; err == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Username sudah dipakai"}); return
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username sudah dipakai"})
+		return
 	}
 
 	hash, _ := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
@@ -259,7 +303,8 @@ func AdminCreateUser(c *gin.Context) {
 		IsActive:     true,
 	}
 	if err := config.DB.Create(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat user"}); return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat user"})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "User berhasil dibuat", "username": user.Username})
 }
@@ -273,25 +318,29 @@ func AdminSetUserPermissions(c *gin.Context) {
 	userID := c.Param("userID") // string
 	var user models.User
 	if err := config.DB.First(&user, userID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"}); return
+		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
+		return
 	}
 
 	var in SetUserPermissionsInput
 	if err := c.ShouldBindJSON(&in); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	// Ambil permission ID dari codes
 	var perms []models.Permission
 	if len(in.PermissionCodes) > 0 {
 		if err := config.DB.Where("code IN ?", in.PermissionCodes).Find(&perms).Error; err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Kode permission tidak valid"}); return
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Kode permission tidak valid"})
+			return
 		}
 	}
 
 	// Replace all permissions user -> teknik sederhana: delete then insert
 	if err := config.DB.Where("user_id = ?", user.ID).Delete(&models.UserPermission{}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal reset permission"}); return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal reset permission"})
+		return
 	}
 	for _, p := range perms {
 		config.DB.Create(&models.UserPermission{
