@@ -13,7 +13,6 @@ import (
 
 func main() {
 	config.ConnectDB()
-	config.SeedPermissions()
 
 	// Auto-migrate models (ADMIN & USER terpisah + PERMISSIONS)
 	config.DB.AutoMigrate(
@@ -26,6 +25,9 @@ func main() {
 		&models.GrupBarang{},
 		&models.Supplier{},
 	)
+
+
+	config.SeedPermissions()
 
 	// override secret dari ENV (Render)
 	if s := os.Getenv("ADMIN_JWT_SECRET"); s != "" {
