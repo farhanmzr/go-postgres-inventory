@@ -16,10 +16,14 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			admin.POST("/register", controllers.AdminRegister)
 			admin.POST("/login", controllers.AdminLogin)
-			
 
 			// Semua di bawah butuh token admin
 			adminAuth := admin.Group("/", middlewares.AdminAuth())
+
+			// Manajemen data profile admin
+			adminAuth.GET("/profile", controllers.GetDataAdminProfile)
+			adminAuth.PUT("/profile", controllers.AdminUpdateProfile)
+			adminAuth.PUT("/profile/password", controllers.AdminChangePassword)
 
 			// Manajemen user operasional
 			adminAuth.GET("/users", controllers.AdminGetAllUsers)
@@ -77,7 +81,6 @@ func SetupRoutes(r *gin.Engine) {
 			// appAuth.POST("/stock/movements", middlewares.RequirePerm("CONSUMPTION"), controllers.CreatePemakaian)
 			// appAuth.GET("/reports/stock", middlewares.RequirePerm("REPORT_STOCK_VIEW"), controllers.ReportStock)
 		}
-
 
 	}
 }
