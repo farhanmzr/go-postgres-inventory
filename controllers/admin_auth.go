@@ -256,14 +256,99 @@ func AdminChangePassword(c *gin.Context) {
 	})
 }
 
-// Admin: lihat semua user (contoh endpoint admin)
+// DTO untuk list (tanpa PasswordHash), plus permissions
+type UserListItem struct {
+	ID           uint    `json:"id"`
+	Username     string  `json:"username"`
+	FullName     string  `json:"full_name"`
+	UserCode     string  `json:"user_code"`
+	Position     string  `json:"position"`
+	WorkLocation string  `json:"work_location"`
+	Phone        string  `json:"phone"`
+	Address      string  `json:"address"`
+	AvatarURL    string  `json:"avatar_url"`
+	IsActive     bool    `json:"is_active"`
+	LastLoginAt  *string `json:"last_login_at,omitempty"` // biar null aman di JSON; opsional pakai *time.Time juga boleh
+	CreatedAt    string  `json:"created_at"`
+	UpdatedAt    string  `json:"updated_at"`
+	Permissions  []string `json:"permissions"` // <-- baru
+}
+
+// Admin: lihat semua user + permissions
 func AdminGetAllUsers(c *gin.Context) {
 	var users []models.User
 	if err := config.DB.Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal ambil data pengguna"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil semua data Users", "total": len(users), "data": users})
+
+	// Jika kosong, langsung balikan kosong
+	if len(users) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Berhasil mengambil semua data Users",
+			"total":   0,
+			"data":    []UserListItem{},
+		})
+		return
+	}
+
+	// Kumpulkan user_id
+	ids := make([]uint, 0, len(users))
+	for _, u := range users { ids = append(ids, u.ID) }
+
+	// Ambil permissions per user dengan satu query
+	type Row struct {
+		UserID uint
+		Code   string
+	}
+	var rows []Row
+	if err := config.DB.Raw(`
+		SELECT up.user_id AS user_id, p.code AS code
+		FROM user_permissions up
+		JOIN permissions p ON p.id = up.permission_id
+		WHERE up.user_id IN ?
+	`, ids).Scan(&rows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal ambil permissions"})
+		return
+	}
+
+	// Map: user_id -> []code
+	permsMap := make(map[uint][]string, len(users))
+	for _, r := range rows {
+		permsMap[r.UserID] = append(permsMap[r.UserID], r.Code)
+	}
+
+	// Bentuk DTO
+	out := make([]UserListItem, 0, len(users))
+	for _, u := range users {
+		var last *string
+		if u.LastLoginAt != nil {
+			iso := u.LastLoginAt.UTC().Format(time.RFC3339)
+			last = &iso
+		}
+		out = append(out, UserListItem{
+			ID:           u.ID,
+			Username:     u.Username,
+			FullName:     u.FullName,
+			UserCode:     u.UserCode,
+			Position:     u.Position,
+			WorkLocation: u.WorkLocation,
+			Phone:        u.Phone,
+			Address:      u.Address,
+			AvatarURL:    u.AvatarURL,
+			IsActive:     u.IsActive,
+			LastLoginAt:  last,
+			CreatedAt:    u.CreatedAt.UTC().Format(time.RFC3339),
+			UpdatedAt:    u.UpdatedAt.UTC().Format(time.RFC3339),
+			Permissions:  permsMap[u.ID], // bisa nil -> otomatis [] saat di-marshal jika mau, atau biarkan nil
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Berhasil mengambil semua data Users",
+		"total":   len(out),
+		"data":    out,
+	})
 }
 
 // Input gabungan (create user + permissions)
