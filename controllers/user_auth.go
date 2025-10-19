@@ -20,16 +20,19 @@ type UserLoginInput struct {
 func UserLogin(c *gin.Context) {
 	var in UserLoginInput
 	if err := c.ShouldBindJSON(&in); err != nil {
-	 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	var user models.User
 	if err := config.DB.Where("username = ? AND is_active = true", in.Username).First(&user).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User tidak ditemukan"}); return
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User tidak ditemukan"})
+		return
 	}
 
 	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(in.Password)) != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Password salah"}); return
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Password salah"})
+		return
 	}
 
 	// Ambil permissions
@@ -41,7 +44,9 @@ func UserLogin(c *gin.Context) {
 		WHERE up.user_id = ?`, user.ID).Scan(&rows)
 
 	perms := make([]string, 0, len(rows))
-	for _, r := range rows { perms = append(perms, r.Code) }
+	for _, r := range rows {
+		perms = append(perms, r.Code)
+	}
 
 	token, _ := utils.GenerateUserToken(user.ID, user.Username, perms, 24*time.Hour)
 
@@ -56,7 +61,8 @@ func UserProfile(c *gin.Context) {
 	uid, _ := c.Get("user_id")
 	var user models.User
 	if err := config.DB.First(&user, uid).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"}); return
+		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Berhasil mengambil profil pengguna",

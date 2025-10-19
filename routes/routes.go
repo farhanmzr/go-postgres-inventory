@@ -27,8 +27,9 @@ func SetupRoutes(r *gin.Engine) {
 
 			// Manajemen user operasional
 			adminAuth.GET("/users", controllers.AdminGetAllUsers)
-			adminAuth.POST("/users", controllers.AdminCreateUser)
+			adminAuth.POST("/users", controllers.AdminCreateUser) // gabungan
 			adminAuth.PUT("/users/:userID/permissions", controllers.AdminSetUserPermissions)
+			adminAuth.GET("/permissions", controllers.AdminListPermissions)
 
 			// Resource ADMIN lainnya (semua di bawah /api/admin/**)
 			barang := adminAuth.Group("/barang")
@@ -68,18 +69,20 @@ func SetupRoutes(r *gin.Engine) {
 			}
 		}
 
-		// ================= USER APP ==================
-		app := api.Group("/app")
+		// ================= USER (customer) APP =================
+		user := api.Group("/user")
 		{
-			app.POST("/login", controllers.UserLogin)
+			user.POST("/login", controllers.UserLogin)
 
-			appAuth := app.Group("/", middlewares.UserAuth())
-			appAuth.GET("/profile", controllers.UserProfile)
+			userAuth := user.Group("/", middlewares.UserAuth())
+			{
+				userAuth.GET("/profile", controllers.UserProfile)
 
-			// contoh endpoint yang butuh permission tertentu:
-			// appAuth.POST("/items", middlewares.RequirePerm("CREATE_ITEM"), controllers.CreateBarangUser)
-			// appAuth.POST("/stock/movements", middlewares.RequirePerm("CONSUMPTION"), controllers.CreatePemakaian)
-			// appAuth.GET("/reports/stock", middlewares.RequirePerm("REPORT_STOCK_VIEW"), controllers.ReportStock)
+				// contoh proteksi:
+				// userAuth.GET("/purchase", middlewares.RequirePerm("PURCHASE"), controllers.PurchaseList)
+				// userAuth.GET("/sales", middlewares.RequirePerm("SALES"), controllers.SalesList)
+				// userAuth.GET("/reports", middlewares.RequirePerm("REPORT_VIEW"), controllers.ReportList)
+			}
 		}
 
 	}
