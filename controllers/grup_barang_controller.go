@@ -30,7 +30,7 @@ func CreateGrupBarang(c *gin.Context) {
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{"message": "Kode grup berhasil ditambahkan", "data": grupBarang})
+    c.JSON(http.StatusOK, gin.H{"message": "Grup Barang berhasil ditambahkan", "data": grupBarang})
 }
 
 func GetAllGrupBarang(c *gin.Context) {
@@ -39,7 +39,7 @@ func GetAllGrupBarang(c *gin.Context) {
         c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
         return
     }
-    c.JSON(http.StatusOK, gin.H{"data": grups})
+    c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil data grup barang", "data": grups})
 }
 
 func GetGrupBarangByID(c *gin.Context) {
@@ -56,7 +56,7 @@ func GetGrupBarangByID(c *gin.Context) {
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{"data": grup})
+    c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil detail data grup barang", "data": grup})
 }
 
 func UpdateGrupBarang(c *gin.Context) {
@@ -69,7 +69,7 @@ func UpdateGrupBarang(c *gin.Context) {
 
     var grup models.GrupBarang
     if err := config.DB.First(&grup, id).Error; err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Kode grup tidak ditemukan"})
+        c.JSON(http.StatusNotFound, gin.H{"error": "Grup Barang tidak ditemukan"})
         return
     }
 
@@ -92,7 +92,7 @@ func UpdateGrupBarang(c *gin.Context) {
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{"message": "Kode grup berhasil diupdate", "data": grup})
+    c.JSON(http.StatusOK, gin.H{"message": "Grup Barang berhasil diupdate", "data": grup})
 }
 
 func DeleteGrupBarang(c *gin.Context) {
@@ -105,14 +105,14 @@ func DeleteGrupBarang(c *gin.Context) {
 
     var grup models.GrupBarang
     if err := config.DB.First(&grup, id).Error; err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Kode grup tidak ditemukan"})
+        c.JSON(http.StatusNotFound, gin.H{"error": "Grup Barang tidak ditemukan"})
         return
     }
 
     if err := config.DB.Delete(&grup).Error; err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal hapus kode grup"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal hapus Grup Barang"})
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{"message": "Kode grup berhasil dihapus"})
+    c.JSON(http.StatusOK, gin.H{"message": "Grup Barang berhasil dihapus"})
 }

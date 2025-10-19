@@ -75,7 +75,7 @@ func GetAllBarang(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": barangs})
+	c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil data Barang", "data": barangs})
 }
 
 func GetBarangByID(c *gin.Context) {
@@ -92,7 +92,7 @@ func GetBarangByID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": barang})
+	c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil detail data Barang", "data": barang})
 }
 
 func UpdateBarang(c *gin.Context) {

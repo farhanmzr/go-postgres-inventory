@@ -41,7 +41,7 @@ func AdminRegister(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat admin"}); return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Admin dibuat", "username": admin.Username})
+	c.JSON(http.StatusOK, gin.H{"message": "Admin berhasil dibuat", "username": admin.Username})
 }
 
 type AdminLoginInput struct {
@@ -77,7 +77,7 @@ func AdminGetAllUsers(c *gin.Context) {
 	if err := config.DB.Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal ambil data pengguna"}); return
 	}
-	c.JSON(http.StatusOK, gin.H{"total": len(users), "data": users})
+	c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil semua data Users", "total": len(users), "data": users})
 }
 
 // Admin: buat user operasional
@@ -119,7 +119,7 @@ func AdminCreateUser(c *gin.Context) {
 	if err := config.DB.Create(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat user"}); return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "User dibuat", "username": user.Username})
+	c.JSON(http.StatusOK, gin.H{"message": "User berhasil dibuat", "username": user.Username})
 }
 
 // Admin: set permissions user

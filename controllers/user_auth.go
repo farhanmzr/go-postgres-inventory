@@ -59,13 +59,7 @@ func UserProfile(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"}); return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"username":      user.Username,
-		"full_name":     user.FullName,
-		"user_code":     user.UserCode,
-		"position":      user.Position,
-		"work_location": user.WorkLocation,
-		"phone":         user.Phone,
-		"address":       user.Address,
-		"avatar_url":    user.AvatarURL,
+		"message": "Berhasil mengambil profil pengguna",
+		"data":    user,
 	})
 }

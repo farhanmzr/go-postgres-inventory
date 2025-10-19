@@ -39,7 +39,7 @@ func GetAllSupplier(c *gin.Context) {
         c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
         return
     }
-    c.JSON(http.StatusOK, gin.H{"data": grups})
+    c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil data Supplier", "data": grups})
 }
 
 func GetSupplierByID(c *gin.Context) {
@@ -56,7 +56,7 @@ func GetSupplierByID(c *gin.Context) {
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{"data": grup})
+    c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil detail data Supplier", "data": grup})
 }
 
 func UpdateSupplier(c *gin.Context) {
