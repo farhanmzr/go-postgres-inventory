@@ -82,6 +82,41 @@ func SetupRoutes(r *gin.Engine) {
 				// userAuth.GET("/purchase", middlewares.RequirePerm("PURCHASE"), controllers.PurchaseList)
 				// userAuth.GET("/sales", middlewares.RequirePerm("SALES"), controllers.SalesList)
 				// userAuth.GET("/reports", middlewares.RequirePerm("REPORT_VIEW"), controllers.ReportList)
+				barang := userAuth.Group("/barang")
+				{
+					barang.GET("/", controllers.GetAllBarang)
+					barang.GET("/:id", controllers.GetBarangByID)
+					barang.POST("/", middlewares.RequirePerm("CREATE_ITEM"), controllers.CreateBarang)
+					// barang.PUT("/:id", controllers.UpdateBarang)
+					// barang.DELETE("/:id", controllers.DeleteBarang)
+				}
+				gudang := userAuth.Group("/gudang")
+				{
+					gudang.GET("/", controllers.GetAllGudang)
+					gudang.GET("/:id", controllers.GetGudangByID)
+					gudang.POST("/", middlewares.RequirePerm("CREATE_GUDANG"), controllers.CreateGudang)
+					// gudang.PUT("/:id", controllers.UpdateGudang)
+					// gudang.DELETE("/:id", controllers.DeleteGudang)
+				}
+
+				grupBarang := userAuth.Group("/grupbarang")
+				{
+					grupBarang.GET("/", controllers.GetAllGrupBarang)
+					grupBarang.GET("/:id", controllers.GetGrupBarangByID)
+					grupBarang.POST("/", middlewares.RequirePerm("CREATE_ITEM_GROUP"), controllers.CreateGrupBarang)
+					// grupBarang.PUT("/:id", controllers.UpdateGrupBarang)
+					// grupBarang.DELETE("/:id", controllers.DeleteGrupBarang)
+				}
+
+				supplier := userAuth.Group("/supplier")
+				{
+					supplier.GET("/", controllers.GetAllSupplier)
+					supplier.GET("/:id", controllers.GetSupplierByID)
+					supplier.POST("/", middlewares.RequirePerm("CREATE_SUPPLIER"), controllers.CreateSupplier)
+					// supplier.PUT("/:id", controllers.UpdateSupplier)
+					// supplier.DELETE("/:id", controllers.DeleteSupplier)
+				}
+
 			}
 		}
 

@@ -10,6 +10,8 @@ func SeedPermissions() {
 		{Code: "CREATE_ITEM", Name: "Tambah Barang Baru"},
 		{Code: "ACCESS_LOCATIONS", Name: "Akses Lokasi Barang & Susunan"},
 		{Code: "CREATE_ITEM_GROUP", Name: "Tambah Grup Barang"},
+		{Code: "CREATE_GUDANG", Name: "Tambah Gudang"},
+		{Code: "CREATE_SUPPLIER", Name: "Tambah Supplier"},
 		{Code: "REPORT_VIEW", Name: "Akses Menu Laporan"},
 		{Code: "REPORT_STOCK_VIEW", Name: "Laporan Stok Barang"},
 	}
