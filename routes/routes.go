@@ -79,6 +79,7 @@ func SetupRoutes(r *gin.Engine) {
 				userAuth.GET("/profile", controllers.UserProfile)
 				userAuth.PUT("/profile", controllers.UserUpdateProfile)
 				userAuth.PUT("/profile/password", controllers.UserChangePassword)
+				userAuth.PUT("/permissions", controllers.GetPermissions)
 
 				// contoh proteksi:
 				// userAuth.GET("/purchase", middlewares.RequirePerm("PURCHASE"), controllers.PurchaseList)

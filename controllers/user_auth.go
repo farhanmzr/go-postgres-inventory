@@ -219,3 +219,29 @@ func UserChangePassword(c *gin.Context) {
 		"message": "Password User berhasil diganti",
 	})
 }
+
+type PermissionInfo struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
+func GetPermissions(c *gin.Context) {
+	uid, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+		return
+	}
+
+	// Ambil permission code + name milik user
+	var perms []PermissionInfo
+	config.DB.Raw(`
+		SELECT p.code, p.name
+		FROM permissions p
+		JOIN user_permissions up ON up.permission_id = p.id
+		WHERE up.user_id = ?`, uid).Scan(&perms)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Berhasil mengambil permission",
+		"data":    perms, // bisa [] kalau kosong
+	})
+}
