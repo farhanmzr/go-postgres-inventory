@@ -2,6 +2,9 @@
 package controllers
 
 import (
+	"fmt"
+	"net/http"
+	"strconv"
 	"time"
 
 	"go-postgres-inventory/config"
@@ -29,64 +32,115 @@ type PurchaseItem struct {
 }
 
 func PurchaseReqCreate(c *gin.Context) {
-	var in PurchaseRequestInput
-	if err := c.ShouldBindJSON(&in); err != nil {
-		c.JSON(400, gin.H{"message": "Payload tidak valid", "error": err.Error()})
-		return
-	}
-	// validasi tanggal tidak ke depan
-	today := time.Now().Truncate(24 * time.Hour)
-	if in.PurchaseDate.After(today) {
-		c.JSON(400, gin.H{"message": "Tanggal pembelian tidak boleh ke depan"})
-		return
-	}
-	// validasi payment
-	if in.Payment != "CASH" && in.Payment != "CREDIT" {
-		c.JSON(400, gin.H{"message": "Metode pembayaran tidak valid"})
-		return
-	}
+    var in PurchaseRequestInput
+    if err := c.ShouldBindJSON(&in); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"message": "Payload tidak valid", "error": err.Error()})
+        return
+    }
 
-	err := config.DB.Transaction(func(tx *gorm.DB) error {
-		// compute total line
-		var items []models.PurchaseReqItem
-		for _, it := range in.Items {
-			items = append(items, models.PurchaseReqItem{
-				BarangID:  it.BarangID,
-				Qty:       it.Qty,
-				BuyPrice:  it.BuyPrice,
-				LineTotal: it.Qty * it.BuyPrice,
-			})
-		}
-		// generate trans code jika kosong
-		code := in.TransCode
-		if code == "" {
-			var seq int64
-			tx.Raw("SELECT COALESCE(MAX(id),0)+1 FROM purchase_requests").Scan(&seq)
-			code = utils.GenTransCode(seq, time.Now())
-		}
+    // validasi tanggal tidak ke depan (gunakan UTC agar konsisten)
+    today := time.Now().UTC().Truncate(24 * time.Hour)
+    if in.PurchaseDate.After(today) {
+        c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal pembelian tidak boleh ke depan"})
+        return
+    }
 
-		uid, _ := c.Get("user_id")
-		p := models.PurchaseRequest{
-			TransCode:    code,
-			ManualCode:   in.ManualCode,
-			BuyerName:    in.BuyerName,
-			PurchaseDate: in.PurchaseDate,
-			WarehouseID:  in.WarehouseID,
-			SupplierID:   in.SupplierID,
-			Payment:      models.PaymentMethod(in.Payment),
-			Status:       models.StatusPending,
-			Items:        items,
-			CreatedByID:  uint(uid.(int)),
-		}
-		return tx.Create(&p).Error
-	})
+    // validasi payment
+    if in.Payment != "CASH" && in.Payment != "CREDIT" {
+        c.JSON(http.StatusBadRequest, gin.H{"message": "Metode pembayaran tidak valid"})
+        return
+    }
 
-	if err != nil {
-		c.JSON(500, gin.H{"message": "Gagal membuat permintaan pembelian", "error": err.Error()})
-		return
-	}
-	c.JSON(201, gin.H{"message": "Permintaan pembelian dibuat (PENDING)"})
+    // --- normalize user_id ---
+    rawID, _ := c.Get("user_id")
+    var userID uint
+    switch v := rawID.(type) {
+    case uint:
+        userID = v
+    case int:
+        userID = uint(v)
+    case int64:
+        userID = uint(v)
+    case float64:
+        userID = uint(v)
+    case string:
+        if n, err := strconv.ParseUint(v, 10, 64); err == nil {
+            userID = uint(n)
+        }
+    default:
+        c.JSON(http.StatusUnauthorized, gin.H{"message": "user_id tidak valid"})
+        return
+    }
+
+    // --- cek FK gudang & supplier ---
+    var cnt int64
+    if err := config.DB.Model(&models.Gudang{}).Where("id = ?", in.WarehouseID).Count(&cnt).Error; err != nil || cnt == 0 {
+        c.JSON(http.StatusBadRequest, gin.H{"message": "Gudang tidak ditemukan"})
+        return
+    }
+    if err := config.DB.Model(&models.Supplier{}).Where("id = ?", in.SupplierID).Count(&cnt).Error; err != nil || cnt == 0 {
+        c.JSON(http.StatusBadRequest, gin.H{"message": "Supplier tidak ditemukan"})
+        return
+    }
+
+    // --- opsional: pastikan semua barang_id ada & memang milik gudang tsb ---
+    for _, it := range in.Items {
+        var exist int64
+        if err := config.DB.Model(&models.Barang{}).
+            Where("id = ? AND gudang_id = ?", it.BarangID, in.WarehouseID).
+            Count(&exist).Error; err != nil || exist == 0 {
+            c.JSON(http.StatusBadRequest, gin.H{"message": fmt.Sprintf("Barang %d tidak ditemukan di gudang %d", it.BarangID, in.WarehouseID)})
+            return
+        }
+    }
+
+    err := config.DB.Transaction(func(tx *gorm.DB) error {
+        // siapkan items
+        items := make([]models.PurchaseReqItem, 0, len(in.Items))
+        for _, it := range in.Items {
+            items = append(items, models.PurchaseReqItem{
+                BarangID:  it.BarangID,
+                Qty:       it.Qty,
+                BuyPrice:  it.BuyPrice,
+                LineTotal: it.Qty * it.BuyPrice,
+            })
+        }
+
+        // generate trans code jika kosong
+        code := in.TransCode
+        if code == "" {
+            var seq int64
+            if err := tx.Raw("SELECT COALESCE(MAX(id),0)+1 FROM purchase_requests").Scan(&seq).Error; err != nil {
+                return err
+            }
+            code = utils.GenTransCode(seq, time.Now())
+        }
+
+        p := models.PurchaseRequest{
+            TransCode:    code,
+            ManualCode:   in.ManualCode,
+            BuyerName:    in.BuyerName,
+            PurchaseDate: in.PurchaseDate,
+            WarehouseID:  in.WarehouseID,
+            SupplierID:   in.SupplierID,
+            Payment:      models.PaymentMethod(in.Payment),
+            Status:       models.StatusPending,
+            Items:        items,
+            CreatedByID:  userID,
+        }
+        return tx.Create(&p).Error
+    })
+
+    if err != nil {
+        // log error ke stdout juga biar ketahuan
+        fmt.Printf("PurchaseReqCreate error: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat permintaan pembelian", "error": err.Error()})
+        return
+    }
+
+    c.JSON(http.StatusCreated, gin.H{"message": "Permintaan pembelian dibuat (PENDING)"})
 }
+
 
 func PurchaseReqMyList(c *gin.Context) {
 	uid, _ := c.Get("user_id")
