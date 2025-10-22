@@ -141,17 +141,50 @@ func PurchaseReqCreate(c *gin.Context) {
     c.JSON(http.StatusCreated, gin.H{"message": "Permintaan pembelian dibuat (PENDING)"})
 }
 
-
 func PurchaseReqMyList(c *gin.Context) {
-	uid, _ := c.Get("user_id")
-	var rows []models.PurchaseRequest
-	if err := config.DB.
-		Where("created_by_id = ?", uint(uid.(int))).
-		Preload("Supplier").Preload("Warehouse").
-		Preload("Items.Barang").
-		Order("id DESC").Find(&rows).Error; err != nil {
-		c.JSON(500, gin.H{"message": "Gagal mengambil data", "error": err.Error()})
+	// --- normalize user_id from context (hindari panic) ---
+	rawID, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "user_id tidak ditemukan"})
 		return
 	}
-	c.JSON(200, gin.H{"data": rows})
+	var userID uint
+	switch v := rawID.(type) {
+	case uint:
+		userID = v
+	case int:
+		userID = uint(v)
+	case int64:
+		userID = uint(v)
+	case float64:
+		userID = uint(v)
+	case string:
+		if n, err := strconv.ParseUint(v, 10, 64); err == nil {
+			userID = uint(n)
+		} else {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "user_id tidak valid"})
+			return
+		}
+	default:
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "user_id tidak valid (tipe tidak dikenal)"})
+		return
+	}
+
+	var rows []models.PurchaseRequest
+	if err := config.DB.
+		Where("created_by_id = ?", userID).
+		Preload("Supplier").
+		Preload("Warehouse").
+		Preload("Items.Barang").
+		Order("id DESC").
+		Find(&rows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Gagal mengambil data",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": rows})
 }
+
