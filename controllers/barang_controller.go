@@ -3,11 +3,13 @@ package controllers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"go-postgres-inventory/config"
 	"go-postgres-inventory/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func CreateBarang(c *gin.Context) {
@@ -185,3 +187,88 @@ func DeleteBarang(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Barang berhasil dihapus"})
 }
+
+
+// response ringkas untuk list barang di gudang
+type BarangSimple struct {
+	ID        uint    `json:"id"`
+	Nama      string  `json:"nama"`
+	HargaBeli float64 `json:"harga_beli"`
+	Stok      int     `json:"stok"`
+	Satuan    string  `json:"satuan"`
+	Kode      string  `json:"kode"`
+}
+
+// GET /gudang/:id/barang?q=...&page=1&limit=50
+func BarangByGudang(c *gin.Context) {
+	// --- parse gudang id ---
+	gidStr := c.Param("id")
+	gid, err := strconv.ParseUint(gidStr, 10, 64)
+	if err != nil || gid == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "gudang_id tidak valid"})
+		return
+	}
+
+	// --- optional query params ---
+	q := strings.TrimSpace(c.Query("q"))
+
+	page := 1
+	limit := 50
+	if v := c.Query("page"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			page = n
+		}
+	}
+	if v := c.Query("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
+			limit = n
+		}
+	}
+	offset := (page - 1) * limit
+
+	// --- build query ---
+	db := config.DB.Model(&models.Barang{}).
+		Where("gudang_id = ?", gid)
+
+	if q != "" {
+		like := "%" + q + "%"
+		// Postgres -> ILIKE (case-insensitive)
+		db = db.Where("(nama ILIKE ? OR kode ILIKE ?)", like, like)
+	}
+
+	var rows []BarangSimple
+	if err := db.
+		Select("id, nama, harga_beli, stok, satuan, kode").
+		Order("nama ASC").
+		Limit(limit).Offset(offset).
+		Find(&rows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Gagal mengambil daftar barang",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// (opsional) total untuk kebutuhan pagination front-end
+	var total int64
+	if err := config.DB.Model(&models.Barang{}).
+		Where("gudang_id = ?", gid).
+		Scopes(func(tx *gorm.DB) *gorm.DB {
+			if q == "" {
+				return tx
+			}
+			like := "%" + q + "%"
+			return tx.Where("(nama ILIKE ? OR kode ILIKE ?)", like, like)
+		}).Count(&total).Error; err != nil {
+		// kalau count gagal, tetap kirim data tanpa total
+		total = int64(len(rows))
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":  rows,
+		"page":  page,
+		"limit": limit,
+		"total": total,
+	})
+}
+

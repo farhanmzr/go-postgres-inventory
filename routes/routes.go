@@ -67,6 +67,12 @@ func SetupRoutes(r *gin.Engine) {
 				supplier.PUT("/:id", controllers.UpdateSupplier)
 				supplier.DELETE("/:id", controllers.DeleteSupplier)
 			}
+			pembelian := adminAuth.Group("/pembelian")
+			{
+				pembelian.GET("/pending", controllers.PurchaseReqPendingList)
+				pembelian.POST("/:id/approve", controllers.PurchaseReqApprove)
+				pembelian.POST("/:id/reject", controllers.PurchaseReqReject)
+			}
 		}
 
 		// ================= USER (customer) APP =================
@@ -80,11 +86,17 @@ func SetupRoutes(r *gin.Engine) {
 				userAuth.PUT("/profile", controllers.UserUpdateProfile)
 				userAuth.PUT("/profile/password", controllers.UserChangePassword)
 				userAuth.GET("/permissions", controllers.GetPermissions)
+				userAuth.GET("/gudang/:id/barang", controllers.BarangByGudang)
 
 				// contoh proteksi:
 				// userAuth.GET("/purchase", middlewares.RequirePerm("PURCHASE"), controllers.PurchaseList)
 				// userAuth.GET("/sales", middlewares.RequirePerm("SALES"), controllers.SalesList)
 				// userAuth.GET("/reports", middlewares.RequirePerm("REPORT_VIEW"), controllers.ReportList)
+				pembelian := userAuth.Group("/pembelian", middlewares.RequirePerm("PURCHASE"))
+				{
+					pembelian.GET("/", controllers.PurchaseReqMyList)
+					pembelian.POST("/", controllers.PurchaseReqCreate)
+				}
 				barang := userAuth.Group("/barang")
 				{
 					barang.GET("/", controllers.GetAllBarang)

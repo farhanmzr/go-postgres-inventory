@@ -24,8 +24,9 @@ func main() {
 		&models.Gudang{},
 		&models.GrupBarang{},
 		&models.Supplier{},
+		&models.PurchaseRequest{},
+		&models.PurchaseReqItem{},
 	)
-
 
 	config.SeedPermissions()
 

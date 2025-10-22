@@ -1,14 +1,49 @@
+// models/purchase_request.go
 package models
 
 import "time"
 
-type Pembelian struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	UserID    uint      `json:"user_id"`
-	User      User      `json:"user" gorm:"foreignKey:UserID"`
-	BarangID  uint      `json:"barang_id"`
-	Barang    Barang    `json:"barang" gorm:"foreignKey:BarangID"`
-	Jumlah    int       `json:"jumlah"`
-	Status    string    `json:"status"` // pending, approved, rejected
-	Tanggal   time.Time `json:"tanggal"`
+type PaymentMethod string
+const (
+	PaymentCash   PaymentMethod = "CASH"
+	PaymentCredit PaymentMethod = "CREDIT"
+)
+
+type PurchaseStatus string
+const (
+	StatusPending  PurchaseStatus = "PENDING"
+	StatusApproved PurchaseStatus = "APPROVED"
+	StatusRejected PurchaseStatus = "REJECTED"
+)
+
+type PurchaseRequest struct {
+	ID              uint            `gorm:"primaryKey" json:"id"`
+	TransCode       string          `gorm:"uniqueIndex;size:40" json:"trans_code"` // e.g. TR-2025-000123 (generate di server)
+	ManualCode      *string         `gorm:"size:40" json:"manual_code"`            // opsional, admin isi
+	BuyerName       string          `gorm:"size:180;not null" json:"buyer_name"`
+	PurchaseDate    time.Time       `json:"purchase_date"` // tanggal (<= today)
+	WarehouseID     uint            `json:"warehouse_id"`
+	Warehouse       Gudang          `json:"warehouse"`
+	SupplierID      uint            `json:"supplier_id"`
+	Supplier        Supplier        `json:"supplier"`
+	Payment         PaymentMethod   `gorm:"size:10" json:"payment"`
+
+	Status          PurchaseStatus  `gorm:"size:12;index" json:"status"`
+	RejectReason    *string         `gorm:"size:255" json:"reject_reason"`
+
+	Items           []PurchaseReqItem `json:"items"`
+
+	CreatedByID     uint            `json:"created_by_id"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+}
+
+type PurchaseReqItem struct {
+	ID                uint    `gorm:"primaryKey" json:"id"`
+	PurchaseRequestID uint    `gorm:"index" json:"purchase_request_id"`
+	BarangID          uint    `json:"barang_id"`
+	Barang            Barang  `json:"barang"`
+	Qty               int64   `json:"qty"`
+	BuyPrice          int64   `json:"buy_price"` // harga beli saat request
+	LineTotal         int64   `json:"line_total"`
 }
