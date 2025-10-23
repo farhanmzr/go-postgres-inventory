@@ -25,6 +25,7 @@ type PurchaseRequestInput struct {
 	Payment      string         `json:"payment" binding:"required"` // "CASH" | "CREDIT"
 	Items        []PurchaseItem `json:"items" binding:"required,min=1"`
 }
+
 type PurchaseItem struct {
 	BarangID  uint  `json:"barang_id" binding:"required"`
 	Qty       int64 `json:"qty" binding:"required,gt=0"`

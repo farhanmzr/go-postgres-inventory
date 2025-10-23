@@ -31,6 +31,8 @@ func SetupRoutes(r *gin.Engine) {
 			adminAuth.PUT("/users/:userID/permissions", controllers.AdminSetUserPermissions)
 			adminAuth.GET("/permissions", controllers.AdminListPermissions)
 
+			adminAuth.GET("/permintaan", controllers.AdminGetAllPermintaan)
+
 			// Resource ADMIN lainnya (semua di bawah /api/admin/**)
 			barang := adminAuth.Group("/barang")
 			{
@@ -92,6 +94,11 @@ func SetupRoutes(r *gin.Engine) {
 				// userAuth.GET("/purchase", middlewares.RequirePerm("PURCHASE"), controllers.PurchaseList)
 				// userAuth.GET("/sales", middlewares.RequirePerm("SALES"), controllers.SalesList)
 				// userAuth.GET("/reports", middlewares.RequirePerm("REPORT_VIEW"), controllers.ReportList)
+				permintaan := userAuth.Group("/permintaan", middlewares.RequirePerm("PERMINTAAN"))
+				{
+					permintaan.GET("/", controllers.CreatePermintaan)
+					permintaan.POST("/", controllers.GetMyPermintaan)
+				}
 				pembelian := userAuth.Group("/pembelian", middlewares.RequirePerm("PURCHASE"))
 				{
 					pembelian.GET("/", controllers.PurchaseReqMyList)

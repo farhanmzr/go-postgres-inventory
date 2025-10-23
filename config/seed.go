@@ -14,6 +14,13 @@ func SeedPermissions() {
 		{Code: "CREATE_SUPPLIER", Name: "Tambah Supplier"},
 		{Code: "REPORT_VIEW", Name: "Akses Menu Laporan"},
 		{Code: "REPORT_STOCK_VIEW", Name: "Laporan Stok Barang"},
+		//
+
+		{Code: "HARGA_BELI_JUAL", Name: "Manage Harga Beli dan Jual"},
+		{Code: "PERMINTAAN", Name: "Permintaan"},
+		{Code: "CUSTOMER", Name: "Customer"},
+		{Code: "EDIT_STOCK", Name: "Manage Stock"},
+		{Code: "APPROVE_REJECT", Name: "Approve & Reject Penjualan Pemakaian"},
 	}
 	for _, p := range codes {
 		var cnt int64
