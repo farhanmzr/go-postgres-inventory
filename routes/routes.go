@@ -96,8 +96,8 @@ func SetupRoutes(r *gin.Engine) {
 				// userAuth.GET("/reports", middlewares.RequirePerm("REPORT_VIEW"), controllers.ReportList)
 				permintaan := userAuth.Group("/permintaan", middlewares.RequirePerm("PERMINTAAN"))
 				{
-					permintaan.GET("/", controllers.CreatePermintaan)
-					permintaan.POST("/", controllers.GetMyPermintaan)
+					permintaan.GET("/", controllers.GetMyPermintaan)
+					permintaan.POST("/", controllers.CreatePermintaan)
 				}
 				pembelian := userAuth.Group("/pembelian", middlewares.RequirePerm("PURCHASE"))
 				{
