@@ -29,9 +29,10 @@ func PurchaseReqPendingList(c *gin.Context) {
 }
 
 var (
-	errNotFound            = errors.New("NOT_FOUND")
-	errBadStatus           = errors.New("BAD_STATUS")
-	errAlreadyProcessed    = errors.New("REQUEST_ALREADY_PROCESSED")
+	errNotFound             = errors.New("NOT_FOUND")
+	errBadStatus            = errors.New("BAD_STATUS")
+	errAlreadyProcessed     = errors.New("REQUEST_ALREADY_PROCESSED")
+	errBarangNotInWarehouse = errors.New("BARANG_NOT_IN_WAREHOUSE")
 )
 
 func PurchaseReqApprove(c *gin.Context) {
@@ -78,7 +79,7 @@ func PurchaseReqApprove(c *gin.Context) {
 			}
 			if inc.RowsAffected == 0 {
 				// Barang tidak ditemukan / tidak ada di gudang PR
-				return errors.New("BARANG_NOT_IN_WAREHOUSE")
+				return errBarangNotInWarehouse
 			}
 		}
 
@@ -94,7 +95,7 @@ func PurchaseReqApprove(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Hanya PENDING yang bisa di-approve"})
 	case errors.Is(err, errAlreadyProcessed):
 		c.JSON(http.StatusConflict, gin.H{"message": "Request sudah diproses"})
-	case err != nil && err.Error() == "BARANG_NOT_IN_WAREHOUSE":
+	case errors.Is(err, errBarangNotInWarehouse):
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Barang tidak sesuai gudang PR"})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal approve", "error": err.Error()})
@@ -160,4 +161,3 @@ func PurchaseReqReject(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal reject", "error": err.Error()})
 	}
 }
-
