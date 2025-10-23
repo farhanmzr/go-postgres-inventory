@@ -34,6 +34,15 @@ func SetupRoutes(r *gin.Engine) {
 			adminAuth.GET("/permintaan", controllers.AdminGetAllPermintaan)
 
 			// Resource ADMIN lainnya (semua di bawah /api/admin/**)
+			customer := adminAuth.Group("/customer")
+			{
+				customer.GET("/", controllers.GetAllCustomer)
+				customer.GET("/:id", controllers.GetCustomerByID)
+				customer.POST("/", controllers.CreateCustomer)
+				customer.PUT("/:id", controllers.UpdateBarang)
+				customer.DELETE("/:id", controllers.DeleteBarang)
+			}
+			
 			barang := adminAuth.Group("/barang")
 			{
 				barang.GET("/", controllers.GetAllBarang)
@@ -103,6 +112,14 @@ func SetupRoutes(r *gin.Engine) {
 				{
 					pembelian.GET("/", controllers.PurchaseReqMyList)
 					pembelian.POST("/", controllers.PurchaseReqCreate)
+				}
+				customer := userAuth.Group("/customer")
+				{
+					customer.GET("/", controllers.GetAllCustomer)
+					customer.GET("/:id", controllers.GetCustomerByID)
+					customer.POST("/", middlewares.RequirePerm("CUSTOMER"), controllers.CreateCustomer)
+					// barang.PUT("/:id", controllers.UpdateBarang)
+					// barang.DELETE("/:id", controllers.DeleteBarang)
 				}
 				barang := userAuth.Group("/barang")
 				{

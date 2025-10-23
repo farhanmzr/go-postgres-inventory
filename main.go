@@ -25,6 +25,7 @@ func main() {
 		&models.GrupBarang{},
 		&models.Supplier{},
 		&models.Permintaan{},
+		&models.Customer{},
 		&models.PurchaseRequest{},
 		&models.PurchaseReqItem{},
 	)
