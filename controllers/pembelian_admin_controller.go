@@ -2,11 +2,15 @@
 package controllers
 
 import (
-
+	"errors"
 	"go-postgres-inventory/config"
 	"go-postgres-inventory/models"
+	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type RejectBody struct {
@@ -24,47 +28,136 @@ func PurchaseReqPendingList(c *gin.Context) {
 	c.JSON(200, gin.H{"data": rows})
 }
 
+var (
+	errNotFound            = errors.New("NOT_FOUND")
+	errBadStatus           = errors.New("BAD_STATUS")
+	errAlreadyProcessed    = errors.New("REQUEST_ALREADY_PROCESSED")
+)
+
 func PurchaseReqApprove(c *gin.Context) {
-	var pr models.PurchaseRequest
-	if err := config.DB.Preload("Items").First(&pr, c.Param("id")).Error; err != nil {
-		c.JSON(404, gin.H{"message": "Data tidak ditemukan"})
-		return
+	id := c.Param("id")
+
+	err := config.DB.Transaction(func(tx *gorm.DB) error {
+		// 1) Lock PR agar tidak diproses bersamaan
+		var pr models.PurchaseRequest
+		if err := tx.
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			Preload("Items").
+			First(&pr, id).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errNotFound
+			}
+			return err
+		}
+
+		if pr.Status != models.StatusPending {
+			return errBadStatus
+		}
+
+		// 2) Idempotent: set APPROVED hanya jika masih PENDING
+		res := tx.Model(&models.PurchaseRequest{}).
+			Where("id = ? AND status = ?", pr.ID, models.StatusPending).
+			Updates(map[string]any{
+				"status":        models.StatusApproved,
+				"reject_reason": gorm.Expr("NULL"),
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errAlreadyProcessed
+		}
+
+		// 3) Tambah stok per item (atomic) + guard gudang
+		for _, it := range pr.Items {
+			inc := tx.Model(&models.Barang{}).
+				Where("id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
+				UpdateColumn("stok", gorm.Expr("stok + ?", it.Qty))
+			if inc.Error != nil {
+				return inc.Error
+			}
+			if inc.RowsAffected == 0 {
+				// Barang tidak ditemukan / tidak ada di gudang PR
+				return errors.New("BARANG_NOT_IN_WAREHOUSE")
+			}
+		}
+
+		return nil
+	})
+
+	switch {
+	case err == nil:
+		c.JSON(http.StatusOK, gin.H{"message": "Approved"})
+	case errors.Is(err, errNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"message": "Data tidak ditemukan"})
+	case errors.Is(err, errBadStatus):
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Hanya PENDING yang bisa di-approve"})
+	case errors.Is(err, errAlreadyProcessed):
+		c.JSON(http.StatusConflict, gin.H{"message": "Request sudah diproses"})
+	case err != nil && err.Error() == "BARANG_NOT_IN_WAREHOUSE":
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Barang tidak sesuai gudang PR"})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal approve", "error": err.Error()})
 	}
-	if pr.Status != models.StatusPending {
-		c.JSON(400, gin.H{"message": "Hanya PENDING yang bisa di-approve"})
-		return
-	}
-	if err := config.DB.Model(&pr).Updates(map[string]any{
-		"status":        models.StatusApproved,
-		"reject_reason": nil,
-	}).Error; err != nil {
-		c.JSON(500, gin.H{"message": "Gagal approve"})
-		return
-	}
-	c.JSON(200, gin.H{"message": "Approved"})
 }
 
 func PurchaseReqReject(c *gin.Context) {
-	var pr models.PurchaseRequest
-	if err := config.DB.First(&pr, c.Param("id")).Error; err != nil {
-		c.JSON(404, gin.H{"message": "Data tidak ditemukan"})
-		return
-	}
-	if pr.Status != models.StatusPending {
-		c.JSON(400, gin.H{"message": "Hanya PENDING yang bisa di-reject"})
-		return
+	id := c.Param("id")
+
+	type RejectBody struct {
+		Reason string `json:"reason" binding:"required"`
 	}
 	var body RejectBody
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(400, gin.H{"message": "Alasan wajib diisi"})
+	if err := c.ShouldBindJSON(&body); err != nil || strings.TrimSpace(body.Reason) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Alasan wajib diisi"})
 		return
 	}
-	if err := config.DB.Model(&pr).Updates(map[string]any{
-		"status":        models.StatusRejected,
-		"reject_reason": body.Reason,
-	}).Error; err != nil {
-		c.JSON(500, gin.H{"message": "Gagal reject"})
-		return
+	reason := strings.TrimSpace(body.Reason)
+
+	err := config.DB.Transaction(func(tx *gorm.DB) error {
+		// Lock PR agar tidak diproses bersamaan
+		var pr models.PurchaseRequest
+		if err := tx.
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			First(&pr, id).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errNotFound
+			}
+			return err
+		}
+
+		if pr.Status != models.StatusPending {
+			return errBadStatus
+		}
+
+		// Idempotent: update hanya jika masih PENDING
+		res := tx.Model(&models.PurchaseRequest{}).
+			Where("id = ? AND status = ?", pr.ID, models.StatusPending).
+			Updates(map[string]any{
+				"status":        models.StatusRejected,
+				"reject_reason": reason,
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errAlreadyProcessed
+		}
+
+		return nil
+	})
+
+	switch {
+	case err == nil:
+		c.JSON(http.StatusOK, gin.H{"message": "Rejected"})
+	case errors.Is(err, errNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"message": "Data tidak ditemukan"})
+	case errors.Is(err, errBadStatus):
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Hanya PENDING yang bisa di-reject"})
+	case errors.Is(err, errAlreadyProcessed):
+		c.JSON(http.StatusConflict, gin.H{"message": "Request sudah diproses"})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal reject", "error": err.Error()})
 	}
-	c.JSON(200, gin.H{"message": "Rejected"})
 }
+
