@@ -28,6 +28,8 @@ func main() {
 		&models.Customer{},
 		&models.PurchaseRequest{},
 		&models.PurchaseReqItem{},
+		&models.UsageRequest{},
+		&models.UsageItem{},
 	)
 
 	config.SeedPermissions()
