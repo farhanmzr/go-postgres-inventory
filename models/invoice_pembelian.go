@@ -34,3 +34,8 @@ type PurchaseInvoiceItem struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+
+// 🔽 Tambahkan ini di file yang sama:
+func (PurchaseInvoice) TableName() string     { return "purchase_invoices" }
+func (PurchaseInvoiceItem) TableName() string { return "purchase_invoice_items" }
