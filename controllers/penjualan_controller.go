@@ -15,25 +15,25 @@ import (
 	"gorm.io/gorm"
 )
 
-type PurchaseRequestInput struct {
-	TransCode    string         `json:"trans_code"`    // dari UI boleh isi nomor transaksi (opsional), kalau kosong server generate
-	ManualCode   *string        `json:"manual_code"`   // biarkan null; admin yang isi nanti
-	PurchaseDate time.Time      `json:"purchase_date"` // wajib <= today
-	BuyerName    string         `json:"buyer_name"`    // auto nama user
-	WarehouseID  uint           `json:"warehouse_id" binding:"required"`
-	SupplierID   uint           `json:"supplier_id" binding:"required"`
-	Payment      string         `json:"payment" binding:"required"` // "CASH" | "CREDIT"
-	Items        []PurchaseItem `json:"items" binding:"required,min=1"`
+type SalesRequestInput struct {
+	TransCode    string      `json:"trans_code"`    // dari UI boleh isi nomor transaksi (opsional), kalau kosong server generate
+	ManualCode   *string     `json:"manual_code"`   // biarkan null; admin yang isi nanti
+	PurchaseDate time.Time   `json:"purchase_date"` // wajib <= today
+	CustomerName    string      `json:"customer_name"`    // auto nama user
+	WarehouseID  uint        `json:"warehouse_id" binding:"required"`
+	SupplierID   uint        `json:"supplier_id" binding:"required"`
+	Payment      string      `json:"payment" binding:"required"` // "CASH" | "CREDIT"
+	Items        []SalesItem `json:"items" binding:"required,min=1"`
 }
 
-type PurchaseItem struct {
-	BarangID uint  `json:"barang_id" binding:"required"`
-	Qty      int64 `json:"qty" binding:"required,gt=0"`
-	BuyPrice int64 `json:"buy_price" binding:"required,gt=0"`
+type SalesItem struct {
+	BarangID  uint  `json:"barang_id" binding:"required"`
+	Qty       int64 `json:"qty" binding:"required,gt=0"`
+	SellPrice int64 `json:"sell_price" binding:"required,gt=0"`
 }
 
-func CreatePembelian(c *gin.Context) {
-	var in PurchaseRequestInput
+func CreatePenjualan(c *gin.Context) {
+	var in SalesRequestInput
 	if err := c.ShouldBindJSON(&in); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Payload tidak valid", "error": err.Error()})
 		return
@@ -42,7 +42,7 @@ func CreatePembelian(c *gin.Context) {
 	// validasi tanggal tidak ke depan (gunakan UTC agar konsisten)
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	if in.PurchaseDate.After(today) {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal pembelian tidak boleh ke depan"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal Penjualan tidak boleh ke depan"})
 		return
 	}
 
@@ -96,89 +96,30 @@ func CreatePembelian(c *gin.Context) {
 	}
 
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
-
-		// 1) Siapkan items untuk PurchaseRequest
-		items := make([]models.PurchaseReqItem, 0, len(in.Items))
+		// siapkan items
+		items := make([]models.SalesReqItem, 0, len(in.Items))
 		for _, it := range in.Items {
-			items = append(items, models.PurchaseReqItem{
+			items = append(items, models.SalesReqItem{
 				BarangID:  it.BarangID,
 				Qty:       it.Qty,
-				BuyPrice:  it.BuyPrice,
-				LineTotal: it.Qty * it.BuyPrice,
+				SellPrice: it.SellPrice,
+				LineTotal: it.Qty * it.SellPrice,
 			})
 		}
 
-        // 2) Insert PurchaseRequest (header)
-		pembelianData := models.PurchaseRequest{
+		penjualanData := models.SalesRequest{
 			TransCode:    in.TransCode,
 			ManualCode:   in.ManualCode,
-			BuyerName:    in.BuyerName,
+			CustomerName: in.CustomerName,
 			PurchaseDate: in.PurchaseDate,
 			WarehouseID:  in.WarehouseID,
 			SupplierID:   in.SupplierID,
 			Payment:      models.PaymentMethod(in.Payment),
+			Status:       models.StatusPending,
 			Items:        items,
 			CreatedByID:  userID,
 		}
-        if err := tx.Create(&pembelianData).Error; err != nil {
-			return err
-		}
-
-        // 4) Tambah stok & update harga_beli (hanya jika berubah)
-		for _, it := range in.Items {
-			// tambah stok atomik
-			res := tx.Model(&models.Barang{}).
-				Where("id = ? AND gudang_id = ?", it.BarangID, pembelianData.WarehouseID).
-				UpdateColumn("stok", gorm.Expr("stok + ?", it.Qty))
-			if res.Error != nil {
-				return res.Error
-			}
-			if res.RowsAffected == 0 {
-				return fmt.Errorf("barang %d tidak ditemukan di gudang %d", it.BarangID, pembelianData.WarehouseID)
-			}
-			// update harga beli terakhir jika berbeda
-			if err := tx.Model(&models.Barang{}).
-				Where("id = ? AND gudang_id = ? AND harga_beli <> ?", it.BarangID, pembelianData.WarehouseID, float64(it.BuyPrice)).
-				Update("harga_beli", float64(it.BuyPrice)).Error; err != nil {
-				return err
-			}
-		}
-
-		// 5) Buat Invoice (header + items) dari data pembelian
-		var subtotal int64 = 0
-		invItems := make([]models.PurchaseInvoiceItem, 0, len(in.Items))
-		for _, it := range in.Items {
-			line := it.Qty * it.BuyPrice
-			subtotal += line
-			invItems = append(invItems, models.PurchaseInvoiceItem{
-				BarangID:  it.BarangID,
-				Qty:       it.Qty,
-				Price:     it.BuyPrice,
-				LineTotal: line,
-			})
-		}
-		discount := int64(0)
-		tax := int64(0)
-		grand := subtotal - discount + tax
-
-		inv := models.PurchaseInvoice{
-			InvoiceNo:         pembelianData.TransCode,       // nomor transaksi = transcode pembelian
-			PurchaseRequestID: pembelianData.ID,
-			BuyerName:         pembelianData.BuyerName,
-			Payment:           pembelianData.Payment,
-			InvoiceDate:       pembelianData.PurchaseDate,    // tanggal invoice = tanggal pembelian
-			Subtotal:          subtotal,
-			Discount:          discount,
-			Tax:               tax,
-			GrandTotal:        grand,
-			Items:             invItems,
-		}
-		if err := tx.Create(&inv).Error; err != nil {
-			return err
-		}
-
-		return nil
-
+		return tx.Create(&penjualanData).Error
 	})
 
 	if err != nil {
@@ -188,10 +129,10 @@ func CreatePembelian(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Berhasil melakukan Pembelian"})
+	c.JSON(http.StatusCreated, gin.H{"message": "Berhasil melakukan Penjualan"})
 }
 
-func PurchaseReqMyList(c *gin.Context) {
+func PenjualanMyList(c *gin.Context) {
 	// --- normalize user_id from context (hindari panic) ---
 	rawID, ok := c.Get("user_id")
 	if !ok {
@@ -235,17 +176,17 @@ func PurchaseReqMyList(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil semua data Pembelian", "data": rows})
+	c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil semua data Penjualan", "data": rows})
 }
 
-func PurchaseInvoiceDetail(c *gin.Context) {
+func SalesInvoiceDetail(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "id tidak valid"})
 		return
 	}
-	var inv models.PurchaseInvoice
+	var inv models.SalesInvoice
 	if err := config.DB.
 		Preload("Items.Barang").
 		First(&inv, uint(id)).Error; err != nil {

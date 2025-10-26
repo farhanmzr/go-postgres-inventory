@@ -9,13 +9,6 @@ const (
 	PaymentCredit PaymentMethod = "CREDIT"
 )
 
-type PurchaseStatus string
-const (
-	StatusPending  PurchaseStatus = "PENDING"
-	StatusApproved PurchaseStatus = "APPROVED"
-	StatusRejected PurchaseStatus = "REJECTED"
-)
-
 type PurchaseRequest struct {
 	ID              uint            `gorm:"primaryKey" json:"id"`
 	TransCode       string          `gorm:"uniqueIndex;size:40" json:"trans_code"` // e.g. TR-2025-000123 (generate di server)
@@ -27,9 +20,6 @@ type PurchaseRequest struct {
 	SupplierID      uint            `json:"supplier_id"`
 	Supplier        Supplier        `json:"supplier"`
 	Payment         PaymentMethod   `gorm:"size:10" json:"payment"`
-
-	Status          PurchaseStatus  `gorm:"size:12;index" json:"status"`
-	RejectReason    *string         `gorm:"size:255" json:"reject_reason"`
 
 	Items           []PurchaseReqItem `json:"items"`
 

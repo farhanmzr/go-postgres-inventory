@@ -86,9 +86,15 @@ func SetupRoutes(r *gin.Engine) {
 			}
 			pembelian := adminAuth.Group("/pembelian")
 			{
-				pembelian.GET("/pending", controllers.PurchaseReqPendingList)
-				pembelian.POST("/:id/approve", controllers.PurchaseReqApprove)
-				pembelian.POST("/:id/reject", controllers.PurchaseReqReject)
+				pembelian.GET("/", controllers.PurchaseReqList)
+				pembelian.GET("/invoice/:id", controllers.PurchaseInvoiceDetail)
+			}
+			penjualan := adminAuth.Group("/penjualan")
+			{
+				penjualan.GET("/", controllers.SalesReqPendingList)
+				penjualan.POST("/:id/approve", controllers.SalesReqApprove)
+				penjualan.POST("/:id/reject", controllers.SalesReqReject)
+				penjualan.GET("/invoice/:id", controllers.SalesInvoiceDetail)
 			}
 		}
 
@@ -120,10 +126,17 @@ func SetupRoutes(r *gin.Engine) {
 					permintaan.GET("/", controllers.GetMyPermintaan)
 					permintaan.POST("/", controllers.CreatePermintaan)
 				}
+				penjualan := userAuth.Group("/penjualan", middlewares.RequirePerm("SALES"))
+				{
+					penjualan.GET("/", controllers.SalesReqPendingList)
+					penjualan.POST("/", controllers.CreatePenjualan)
+					penjualan.GET("/invoice/:id", controllers.SalesInvoiceDetail)
+				}
 				pembelian := userAuth.Group("/pembelian", middlewares.RequirePerm("PURCHASE"))
 				{
 					pembelian.GET("/", controllers.PurchaseReqMyList)
-					pembelian.POST("/", controllers.PurchaseReqCreate)
+					pembelian.POST("/", controllers.CreatePembelian)
+					pembelian.GET("/invoice/:id", controllers.PurchaseInvoiceDetail)
 				}
 				customer := userAuth.Group("/customer")
 				{

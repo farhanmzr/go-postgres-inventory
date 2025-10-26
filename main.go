@@ -26,10 +26,16 @@ func main() {
 		&models.Supplier{},
 		&models.Permintaan{},
 		&models.Customer{},
-		&models.PurchaseRequest{},
-		&models.PurchaseReqItem{},
 		&models.UsageRequest{},
 		&models.UsageItem{},
+		&models.PurchaseRequest{},
+		&models.PurchaseReqItem{},
+		&models.PurchaseInvoice{},
+		&models.PurchaseInvoiceItem{},
+		&models.SalesRequest{},
+		&models.SalesReqItem{},
+		&models.SalesInvoice{},
+		&models.SalesInvoiceItem{},
 	)
 
 	config.SeedPermissions()
