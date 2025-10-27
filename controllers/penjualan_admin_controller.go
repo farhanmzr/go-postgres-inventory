@@ -104,7 +104,7 @@ func SalesReqApprove(c *gin.Context) {
 		inv := models.SalesInvoice{
 			InvoiceNo:      pr.TransCode,
 			SalesRequestID: pr.ID,
-			CustomerName:   pr.CustomerName, // pastikan relasi Customer ter-preload
+			Username:       pr.Username, // pastikan relasi Customer ter-preload
 			Payment:        pr.Payment,
 			InvoiceDate:    time.Now().UTC(),
 			Subtotal:       subtotal,
@@ -135,7 +135,6 @@ func SalesReqApprove(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal approve", "error": err.Error()})
 	}
 }
-
 
 func SalesReqReject(c *gin.Context) {
 	id := c.Param("id")

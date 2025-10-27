@@ -15,12 +15,12 @@ type SalesRequest struct {
 	ID           uint          `gorm:"primaryKey" json:"id"`
 	TransCode    string        `gorm:"uniqueIndex;size:40" json:"trans_code"` // e.g. TR-2025-000123 (generate di server)
 	ManualCode   *string       `gorm:"size:40" json:"manual_code"`            // opsional, admin isi
-	CustomerName string        `gorm:"size:180;not null" json:"customer_name"`
+	Username     string        `gorm:"size:180;not null" json:"username"`
 	PurchaseDate time.Time     `json:"purchase_date"` // tanggal (<= today)
 	WarehouseID  uint          `json:"warehouse_id"`
 	Warehouse    Gudang        `json:"warehouse"`
-	SupplierID   uint          `json:"supplier_id"`
-	Supplier     Supplier      `json:"supplier"`
+	CustomerID   uint          `json:"customer_id"`
+	Customer     Customer      `json:"customer"`
 	Payment      PaymentMethod `gorm:"size:10" json:"payment"`
 
 	Status       SalesStatus `gorm:"size:12;index" json:"status"`

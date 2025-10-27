@@ -19,9 +19,9 @@ type SalesRequestInput struct {
 	TransCode    string      `json:"trans_code"`    // dari UI boleh isi nomor transaksi (opsional), kalau kosong server generate
 	ManualCode   *string     `json:"manual_code"`   // biarkan null; admin yang isi nanti
 	PurchaseDate time.Time   `json:"purchase_date"` // wajib <= today
-	CustomerName    string      `json:"customer_name"`    // auto nama user
+	Username     string      `json:"username"`      // auto nama user
 	WarehouseID  uint        `json:"warehouse_id" binding:"required"`
-	SupplierID   uint        `json:"supplier_id" binding:"required"`
+	CustomerID   uint        `json:"customer_id" binding:"required"`
 	Payment      string      `json:"payment" binding:"required"` // "CASH" | "CREDIT"
 	Items        []SalesItem `json:"items" binding:"required,min=1"`
 }
@@ -40,9 +40,10 @@ func CreatePenjualan(c *gin.Context) {
 	}
 
 	// validasi tanggal tidak ke depan (gunakan UTC agar konsisten)
-	today := time.Now().UTC().Truncate(24 * time.Hour)
-	if in.PurchaseDate.After(today) {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal Penjualan tidak boleh ke depan"})
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+	today := time.Now().In(loc).Truncate(24 * time.Hour)
+	if in.PurchaseDate.In(loc).After(today) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal pembelian tidak boleh ke depan"})
 		return
 	}
 
@@ -73,14 +74,14 @@ func CreatePenjualan(c *gin.Context) {
 		return
 	}
 
-	// --- cek FK gudang & supplier ---
+	// --- cek FK gudang & customer ---
 	var cnt int64
 	if err := config.DB.Model(&models.Gudang{}).Where("id = ?", in.WarehouseID).Count(&cnt).Error; err != nil || cnt == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Gudang tidak ditemukan"})
 		return
 	}
-	if err := config.DB.Model(&models.Supplier{}).Where("id = ?", in.SupplierID).Count(&cnt).Error; err != nil || cnt == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Supplier tidak ditemukan"})
+	if err := config.DB.Model(&models.Customer{}).Where("id = ?", in.CustomerID).Count(&cnt).Error; err != nil || cnt == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Customer tidak ditemukan"})
 		return
 	}
 
@@ -110,10 +111,10 @@ func CreatePenjualan(c *gin.Context) {
 		penjualanData := models.SalesRequest{
 			TransCode:    in.TransCode,
 			ManualCode:   in.ManualCode,
-			CustomerName: in.CustomerName,
+			Username:     in.Username,
 			PurchaseDate: in.PurchaseDate,
 			WarehouseID:  in.WarehouseID,
-			SupplierID:   in.SupplierID,
+			CustomerID:   in.CustomerID,
 			Payment:      models.PaymentMethod(in.Payment),
 			Status:       models.StatusPending,
 			Items:        items,

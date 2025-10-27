@@ -40,8 +40,9 @@ func CreatePembelian(c *gin.Context) {
 	}
 
 	// validasi tanggal tidak ke depan (gunakan UTC agar konsisten)
-	today := time.Now().UTC().Truncate(24 * time.Hour)
-	if in.PurchaseDate.After(today) {
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+	today := time.Now().In(loc).Truncate(24 * time.Hour)
+	if in.PurchaseDate.In(loc).After(today) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal pembelian tidak boleh ke depan"})
 		return
 	}
@@ -108,7 +109,7 @@ func CreatePembelian(c *gin.Context) {
 			})
 		}
 
-        // 2) Insert PurchaseRequest (header)
+		// 2) Insert PurchaseRequest (header)
 		pembelianData := models.PurchaseRequest{
 			TransCode:    in.TransCode,
 			ManualCode:   in.ManualCode,
@@ -120,11 +121,11 @@ func CreatePembelian(c *gin.Context) {
 			Items:        items,
 			CreatedByID:  userID,
 		}
-        if err := tx.Create(&pembelianData).Error; err != nil {
+		if err := tx.Create(&pembelianData).Error; err != nil {
 			return err
 		}
 
-        // 4) Tambah stok & update harga_beli (hanya jika berubah)
+		// 4) Tambah stok & update harga_beli (hanya jika berubah)
 		for _, it := range in.Items {
 			// tambah stok atomik
 			res := tx.Model(&models.Barang{}).
@@ -162,11 +163,11 @@ func CreatePembelian(c *gin.Context) {
 		grand := subtotal - discount + tax
 
 		inv := models.PurchaseInvoice{
-			InvoiceNo:         pembelianData.TransCode,       // nomor transaksi = transcode pembelian
+			InvoiceNo:         pembelianData.TransCode, // nomor transaksi = transcode pembelian
 			PurchaseRequestID: pembelianData.ID,
 			BuyerName:         pembelianData.BuyerName,
 			Payment:           pembelianData.Payment,
-			InvoiceDate:       pembelianData.PurchaseDate,    // tanggal invoice = tanggal pembelian
+			InvoiceDate:       pembelianData.PurchaseDate, // tanggal invoice = tanggal pembelian
 			Subtotal:          subtotal,
 			Discount:          discount,
 			Tax:               tax,

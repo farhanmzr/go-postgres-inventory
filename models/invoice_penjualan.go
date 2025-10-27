@@ -7,7 +7,7 @@ type SalesInvoice struct {
 	ID             uint               `gorm:"primaryKey" json:"id"`
 	InvoiceNo      string             `gorm:"uniqueIndex;not null" json:"invoice_no"`
 	SalesRequestID uint               `gorm:"not null" json:"sales_request_id"`
-	CustomerName   string             `gorm:"not null" json:"customer_name"`
+	Username       string             `gorm:"not null" json:"username"`
 	Payment        PaymentMethod      `gorm:"type:text;not null" json:"payment"`
 	InvoiceDate    time.Time          `gorm:"not null" json:"invoice_date"`
 	Subtotal       int64              `gorm:"not null" json:"subtotal"`
