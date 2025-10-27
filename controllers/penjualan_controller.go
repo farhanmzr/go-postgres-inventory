@@ -16,14 +16,14 @@ import (
 )
 
 type SalesRequestInput struct {
-	TransCode    string      `json:"trans_code"`    // dari UI boleh isi nomor transaksi (opsional), kalau kosong server generate
-	ManualCode   *string     `json:"manual_code"`   // biarkan null; admin yang isi nanti
-	PurchaseDate time.Time   `json:"purchase_date"` // wajib <= today
-	Username     string      `json:"username"`      // auto nama user
-	WarehouseID  uint        `json:"warehouse_id" binding:"required"`
-	CustomerID   uint        `json:"customer_id" binding:"required"`
-	Payment      string      `json:"payment" binding:"required"` // "CASH" | "CREDIT"
-	Items        []SalesItem `json:"items" binding:"required,min=1"`
+	TransCode   string      `json:"trans_code"`  // dari UI boleh isi nomor transaksi (opsional), kalau kosong server generate
+	ManualCode  *string     `json:"manual_code"` // biarkan null; admin yang isi nanti
+	SalesDate   time.Time   `json:"sales_date"`  // wajib <= today
+	Username    string      `json:"username"`    // auto nama user
+	WarehouseID uint        `json:"warehouse_id" binding:"required"`
+	CustomerID  uint        `json:"customer_id" binding:"required"`
+	Payment     string      `json:"payment" binding:"required"` // "CASH" | "CREDIT"
+	Items       []SalesItem `json:"items" binding:"required,min=1"`
 }
 
 type SalesItem struct {
@@ -42,7 +42,7 @@ func CreatePenjualan(c *gin.Context) {
 	// validasi tanggal tidak ke depan (gunakan UTC agar konsisten)
 	loc, _ := time.LoadLocation("Asia/Jakarta")
 	today := time.Now().In(loc).Truncate(24 * time.Hour)
-	if in.PurchaseDate.In(loc).After(today) {
+	if in.SalesDate.In(loc).After(today) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal pembelian tidak boleh ke depan"})
 		return
 	}
@@ -109,16 +109,16 @@ func CreatePenjualan(c *gin.Context) {
 		}
 
 		penjualanData := models.SalesRequest{
-			TransCode:    in.TransCode,
-			ManualCode:   in.ManualCode,
-			Username:     in.Username,
-			PurchaseDate: in.PurchaseDate,
-			WarehouseID:  in.WarehouseID,
-			CustomerID:   in.CustomerID,
-			Payment:      models.PaymentMethod(in.Payment),
-			Status:       models.StatusPending,
-			Items:        items,
-			CreatedByID:  userID,
+			TransCode:   in.TransCode,
+			ManualCode:  in.ManualCode,
+			Username:    in.Username,
+			SalesDate:   in.SalesDate,
+			WarehouseID: in.WarehouseID,
+			CustomerID:  in.CustomerID,
+			Payment:     models.PaymentMethod(in.Payment),
+			Status:      models.StatusPending,
+			Items:       items,
+			CreatedByID: userID,
 		}
 		return tx.Create(&penjualanData).Error
 	})

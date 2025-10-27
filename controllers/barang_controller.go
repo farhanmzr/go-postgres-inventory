@@ -194,6 +194,7 @@ type BarangSimple struct {
 	ID        uint    `json:"id"`
 	Nama      string  `json:"nama"`
 	HargaBeli float64 `json:"harga_beli"`
+	HargaJual float64 `json:"harga_jual"`
 	Stok      int     `json:"stok"`
 	Satuan    string  `json:"satuan"`
 	Kode      string  `json:"kode"`
@@ -238,7 +239,7 @@ func BarangByGudang(c *gin.Context) {
 
 	var rows []BarangSimple
 	if err := db.
-		Select("id, nama, harga_beli, stok, satuan, kode").
+		Select("id, nama, harga_beli, harga_jual, stok, satuan, kode").
 		Order("nama ASC").
 		Limit(limit).Offset(offset).
 		Find(&rows).Error; err != nil {
