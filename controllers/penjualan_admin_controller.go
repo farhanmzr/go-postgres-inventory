@@ -20,7 +20,7 @@ type RejectBody struct {
 
 func SalesReqPendingList(c *gin.Context) {
 	var rows []models.SalesRequest
-	if err := config.DB.Preload("Supplier").Preload("Warehouse").Preload("Items.Barang").
+	if err := config.DB.Preload("Customer").Preload("Warehouse").Preload("Items.Barang").
 		Where("status = ?", models.StatusPending).Order("id DESC").
 		Find(&rows).Error; err != nil {
 		c.JSON(500, gin.H{"message": "Gagal mengambil data", "error": err.Error()})
