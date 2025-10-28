@@ -4,9 +4,9 @@ import "time"
 
 // models/purchase_invoice.go
 type PurchaseInvoice struct {
-	ID                uint          `gorm:"primaryKey" json:"id"`
+
+    PurchaseRequestID uint           `gorm:"primaryKey" json:"id"` // expose sebagai "id" di JSON
 	InvoiceNo         string        `gorm:"index:idx_purchase_invoices_invoice_no,unique;not null" json:"invoice_no"`
-	PurchaseRequestID uint          `gorm:"not null" json:"purchase_request_id"`
 	BuyerName         string        `gorm:"not null" json:"buyer_name"`
 	Payment           PaymentMethod `gorm:"type:text;not null" json:"payment"`
 	InvoiceDate       time.Time     `gorm:"not null" json:"invoice_date"`
@@ -15,8 +15,9 @@ type PurchaseInvoice struct {
 	Tax               int64         `gorm:"not null;default:0" json:"tax"`
 	GrandTotal        int64         `gorm:"not null" json:"grand_total"`
 
-	// biar GORM tau relasi otomatis, cukup begini ketika child punya PurchaseInvoiceID
-	Items     []PurchaseInvoiceItem `json:"items" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	// Penting: mapping foreignKey/references karena PK parent = PurchaseRequestID (bukan kolom "id")
+    Items     []PurchaseInvoiceItem `gorm:"foreignKey:PurchaseInvoiceID;references:PurchaseRequestID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"items"`
+	
 	CreatedAt time.Time             `json:"created_at"`
 	UpdatedAt time.Time             `json:"updated_at"`
 }
@@ -34,7 +35,3 @@ type PurchaseInvoiceItem struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
-
-// 🔽 Tambahkan ini di file yang sama:
-func (PurchaseInvoice) TableName() string     { return "purchase_invoices" }
-func (PurchaseInvoiceItem) TableName() string { return "purchase_invoice_items" }

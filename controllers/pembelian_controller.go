@@ -34,6 +34,9 @@ type PurchaseItem struct {
 
 func CreatePembelian(c *gin.Context) {
 	var in PurchaseRequestInput
+	var pembelianData models.PurchaseRequest
+	var inv models.PurchaseInvoice
+
 	if err := c.ShouldBindJSON(&in); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Payload tidak valid", "error": err.Error()})
 		return
@@ -163,8 +166,8 @@ func CreatePembelian(c *gin.Context) {
 		grand := subtotal - discount + tax
 
 		inv := models.PurchaseInvoice{
-			InvoiceNo:         pembelianData.TransCode, // nomor transaksi = transcode pembelian
 			PurchaseRequestID: pembelianData.ID,
+			InvoiceNo:         pembelianData.TransCode, // nomor transaksi = transcode pembelian
 			BuyerName:         pembelianData.BuyerName,
 			Payment:           pembelianData.Payment,
 			InvoiceDate:       pembelianData.PurchaseDate, // tanggal invoice = tanggal pembelian
@@ -189,7 +192,13 @@ func CreatePembelian(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Berhasil melakukan Pembelian"})
+	// (Opsional) balikin info ini, tapi tidak wajib karena ID sama
+	c.JSON(http.StatusCreated, gin.H{
+		"message":             "Berhasil melakukan Pembelian",
+		"purchase_request_id": pembelianData.ID,
+		"invoice_id":          inv.PurchaseRequestID, // == purchase_request_id
+		"invoice_no":          inv.InvoiceNo,
+	})
 }
 
 func PurchaseReqMyList(c *gin.Context) {
