@@ -1,12 +1,13 @@
 package main
 
 import (
+	"log"
+	"os"
+
 	"go-postgres-inventory/config"
 	"go-postgres-inventory/models"
 	"go-postgres-inventory/routes"
 	"go-postgres-inventory/utils"
-
-	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,33 +15,39 @@ import (
 func main() {
 	config.ConnectDB()
 
-	// Auto-migrate models (ADMIN & USER terpisah + PERMISSIONS)
-	config.DB.AutoMigrate(
+	// 🧱 Auto-migrate SEMUA tabel yang kamu butuhkan
+	if err := config.DB.AutoMigrate(
 		&models.Admin{},
 		&models.User{},
 		&models.Permission{},
 		&models.UserPermission{},
-		&models.Barang{},
+
 		&models.Gudang{},
 		&models.GrupBarang{},
+		&models.Barang{},
 		&models.Supplier{},
-		&models.Permintaan{},
 		&models.Customer{},
-		&models.UsageRequest{},
-		&models.UsageItem{},
+
 		&models.PurchaseRequest{},
 		&models.PurchaseReqItem{},
 		&models.PurchaseInvoice{},
 		&models.PurchaseInvoiceItem{},
+
+		&models.UsageRequest{},
+		&models.UsageItem{},
+
 		&models.SalesRequest{},
 		&models.SalesReqItem{},
 		&models.SalesInvoice{},
 		&models.SalesInvoiceItem{},
-	)
+	); err != nil {
+		log.Fatalf("❌ AutoMigrate error: %v", err)
+	}
+	log.Println("✅ AutoMigrate done")
 
 	config.SeedPermissions()
 
-	// override secret dari ENV (Render)
+	// Secrets dari ENV (Render)
 	if s := os.Getenv("ADMIN_JWT_SECRET"); s != "" {
 		utils.AdminSecret = []byte(s)
 	}
@@ -60,5 +67,4 @@ func main() {
 		port = "8080"
 	}
 	_ = r.Run(":" + port)
-
 }

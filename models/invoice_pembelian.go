@@ -5,7 +5,7 @@ import "time"
 // models/purchase_invoice.go
 type PurchaseInvoice struct {
 	ID                uint          `gorm:"primaryKey" json:"id"`
-	InvoiceNo         string        `gorm:"uniqueIndex;not null" json:"invoice_no"`
+	InvoiceNo         string        `gorm:"index:idx_purchase_invoices_invoice_no,unique;not null" json:"invoice_no"`
 	PurchaseRequestID uint          `gorm:"not null" json:"purchase_request_id"`
 	BuyerName         string        `gorm:"not null" json:"buyer_name"`
 	Payment           PaymentMethod `gorm:"type:text;not null" json:"payment"`
@@ -34,7 +34,6 @@ type PurchaseInvoiceItem struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
-
 
 // 🔽 Tambahkan ini di file yang sama:
 func (PurchaseInvoice) TableName() string     { return "purchase_invoices" }
