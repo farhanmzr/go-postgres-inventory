@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"go-postgres-inventory/config"
@@ -97,68 +98,83 @@ func CreatePenjualan(c *gin.Context) {
 		}
 	}
 
-	// Transaksi: generate trans_code unik per user dan simpan
-	err := config.DB.Transaction(func(tx *gorm.DB) error {
-		// Ambil urutan berikutnya yg aman dari race:
-		// SELECT COALESCE(MAX(trans_seq),0) FOR UPDATE WHERE created_by_id = ?
-		type row struct{ Max uint }
-		var r row
-		if err := tx.
-			Table("sales_requests").
-			Select("COALESCE(MAX(trans_seq), 0) AS max").
-			Where("created_by_id = ?", userID).
-			Clauses(clause.Locking{Strength: "UPDATE"}).
-			Scan(&r).Error; err != nil {
-			return err
-		}
+	// ===== transaksi + retry untuk antisipasi race =====
+	const maxRetries = 3
+	var lastErr error
 
-		nextSeq := r.Max + 1
-		transCode := fmt.Sprintf("SL-%d-%d", userID, nextSeq)
-
-		// siapkan items
-		items := make([]models.SalesReqItem, 0, len(in.Items))
-		for _, it := range in.Items {
-			items = append(items, models.SalesReqItem{
-				BarangID:  it.BarangID,
-				Qty:       it.Qty,
-				SellPrice: it.SellPrice,
-				LineTotal: it.Qty * it.SellPrice,
-			})
-		}
-
-		penjualanData := models.SalesRequest{
-			TransCode:   transCode,
-			TransSeq:    nextSeq,
-			ManualCode:  in.ManualCode,
-			Username:    in.Username,
-			SalesDate:   in.SalesDate,
-			WarehouseID: in.WarehouseID,
-			CustomerID:  in.CustomerID,
-			Payment:     models.PaymentMethod(in.Payment),
-			Status:      models.StatusPending,
-			Items:       items,
-			CreatedByID: userID,
-		}
-		if err := tx.Create(&penjualanData).Error; err != nil {
-			// Kalau ada kemungkinan bentrok unique (sangat jarang), balas error yg proper
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-				return fmt.Errorf("kode transaksi sudah dipakai, coba lagi")
+	for range maxRetries {
+		lastErr = config.DB.Transaction(func(tx *gorm.DB) error {
+			// a) Lock row terakhir user ini (bukan agregat)
+			var last models.SalesRequest
+			if err := tx.
+				Where("created_by_id = ?", userID).
+				Order("trans_seq DESC").
+				Clauses(clause.Locking{Strength: "UPDATE"}).
+				Limit(1).
+				Find(&last).Error; err != nil {
+				return err
 			}
-			return err
-		}
-		return nil
-	})
 
-	if err != nil {
-		// log error ke stdout juga biar ketahuan
-		fmt.Printf("PurchaseReqCreate error: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat permintaan penjualan", "error": err.Error()})
-		return
+			nextSeq := uint(1)
+			if last.ID != 0 {
+				nextSeq = last.TransSeq + 1
+			}
+			transCode := fmt.Sprintf("SL-%d-%d", userID, nextSeq)
+
+			// b) siapkan items
+			items := make([]models.SalesReqItem, 0, len(in.Items))
+			for _, it := range in.Items {
+				items = append(items, models.SalesReqItem{
+					BarangID:  it.BarangID,
+					Qty:       it.Qty,
+					SellPrice: it.SellPrice,
+					LineTotal: it.Qty * it.SellPrice,
+				})
+			}
+
+			// c) insert header
+			data := models.SalesRequest{
+				TransCode:   transCode,
+				TransSeq:    nextSeq,
+				ManualCode:  in.ManualCode,
+				Username:    in.Username,
+				SalesDate:   in.SalesDate,
+				WarehouseID: in.WarehouseID,
+				CustomerID:  in.CustomerID,
+				Payment:     models.PaymentMethod(in.Payment),
+				Status:      models.StatusPending,
+				Items:       items,
+				CreatedByID: userID,
+			}
+
+			if err := tx.Create(&data).Error; err != nil {
+				// jika bentrok unik, bubble up dengan kode supaya kita retry
+				var pgErr *pgconn.PgError
+				if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+					return fmt.Errorf("unique_violation: %w", err)
+				}
+				return err
+			}
+			return nil
+		})
+
+		if lastErr == nil {
+			// sukses
+			c.JSON(http.StatusCreated, gin.H{"message": "Berhasil membuat Penjualan (PENDING)"})
+			return
+		}
+
+		// kalau bentrok unik, retry
+		if strings.Contains(lastErr.Error(), "unique_violation") {
+			continue
+		}
+		break
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "Berhasil melakukan Penjualan",
+	// jika masih gagal
+	c.JSON(http.StatusInternalServerError, gin.H{
+		"message": "Gagal membuat permintaan penjualan",
+		"error":   lastErr.Error(),
 	})
 }
 
