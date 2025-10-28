@@ -27,6 +27,11 @@ type SalesInvoiceItem struct {
 	BarangID       uint      `gorm:"not null" json:"barang_id"`
 	Qty            int64     `gorm:"not null" json:"qty"`
 	Price          int64     `gorm:"not null" json:"price"`      // harga jual per unit
+	// ⬇️ kolom baru untuk profit
+    CostPrice       int64  `gorm:"not null"` // snapshot harga beli/unit saat penjualan dibuat
+    ProfitPerUnit   int64  `gorm:"not null"` // = Price - CostPrice
+    ProfitTotal     int64  `gorm:"not null"` // = ProfitPerUnit * Qty
+	
 	LineTotal      int64     `gorm:"not null" json:"line_total"` // qty * price
 	Barang         *Barang   `json:"barang,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`

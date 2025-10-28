@@ -5,6 +5,7 @@ import (
 	"errors"
 	"go-postgres-inventory/config"
 	"go-postgres-inventory/models"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -88,15 +89,34 @@ func SalesReqApprove(c *gin.Context) {
 		var subtotal int64 = 0
 		invItems := make([]models.SalesInvoiceItem, 0, len(pr.Items))
 		for _, it := range pr.Items {
-			line := it.Qty * it.SellPrice // asumsikan ada field SellPrice di SalesItem
-			subtotal += line
+			// ambil COST dari barang di gudang tsb (last buy price / WA / FIFO — di sini contoh last buy price)
+			var barang models.Barang
+			if err := tx.Where("id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
+				First(&barang).Error; err != nil {
+				return err
+			}
+
+			// asumsi barang.HargaBeli disimpan float64 → konversi ke int64 sesuai kebijakan (pembulatan ke terdekat)
+			cost := int64(math.Round(barang.HargaBeli))
+
+			// guard untuk qty > 0
+			netPrice := it.SellPrice
+			netLine := netPrice * it.Qty
+			profitPer := netPrice - cost
+			profitTot := profitPer * it.Qty
+
 			invItems = append(invItems, models.SalesInvoiceItem{
-				BarangID:  it.BarangID,
-				Qty:       it.Qty,
-				Price:     it.SellPrice,
-				LineTotal: line,
+				BarangID:      it.BarangID,
+				Qty:           it.Qty,
+				Price:         netPrice,
+				CostPrice:     cost,
+				ProfitPerUnit: profitPer,
+				ProfitTotal:   profitTot,
+				LineTotal:     netLine,
 			})
+			subtotal += netLine
 		}
+
 		discount := int64(0)
 		tax := int64(0)
 		grand := subtotal - discount + tax
