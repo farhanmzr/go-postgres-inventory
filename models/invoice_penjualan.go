@@ -4,9 +4,8 @@ import "time"
 
 // Invoice penjualan (header)
 type SalesInvoice struct {
-	ID             uint               `gorm:"primaryKey" json:"id"`
-	InvoiceNo      string             `gorm:"uniqueIndex;not null" json:"invoice_no"`
-	SalesRequestID uint               `gorm:"not null" json:"sales_request_id"`
+	SalesRequestID uint               `gorm:"primaryKey" json:"id"` // expose sebagai "id" di JSON
+	InvoiceNo         string        `gorm:"index:idx_sales_invoices_invoice_no,unique;not null" json:"invoice_no"`
 	Username       string             `gorm:"not null" json:"username"`
 	Payment        PaymentMethod      `gorm:"type:text;not null" json:"payment"`
 	InvoiceDate    time.Time          `gorm:"not null" json:"invoice_date"`
@@ -14,7 +13,9 @@ type SalesInvoice struct {
 	Discount       int64              `gorm:"not null;default:0" json:"discount"`
 	Tax            int64              `gorm:"not null;default:0" json:"tax"`
 	GrandTotal     int64              `gorm:"not null" json:"grand_total"`
-	Items          []SalesInvoiceItem `json:"items" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+
+	Items          []SalesInvoiceItem `gorm:"foreignKey:SalesInvoiceID;references:SalesRequestID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+
 	CreatedAt      time.Time          `json:"created_at"`
 	UpdatedAt      time.Time          `json:"updated_at"`
 }

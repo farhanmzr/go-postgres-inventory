@@ -13,7 +13,7 @@ const (
 
 type SalesRequest struct {
 	ID          uint          `gorm:"primaryKey" json:"id"`
-	TransCode   string        `gorm:"uniqueIndex;size:40" json:"trans_code"` // e.g. TR-2025-000123 (generate di server)
+	TransCode   string        `gorm:"uniqueIndex;size:64" json:"trans_code"` // e.g. TR-2025-000123 (generate di server)
 	ManualCode  *string       `gorm:"size:40" json:"manual_code"`            // opsional, admin isi
 	Username    string        `gorm:"size:180;not null" json:"username"`
 	SalesDate   time.Time     `json:"sales_date"` // tanggal (<= today)

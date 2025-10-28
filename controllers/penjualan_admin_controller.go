@@ -102,8 +102,8 @@ func SalesReqApprove(c *gin.Context) {
 		grand := subtotal - discount + tax
 
 		inv := models.SalesInvoice{
-			InvoiceNo:      pr.TransCode,
 			SalesRequestID: pr.ID,
+			InvoiceNo:      pr.TransCode,
 			Username:       pr.Username, // pastikan relasi Customer ter-preload
 			Payment:        pr.Payment,
 			InvoiceDate:    time.Now().UTC(),
