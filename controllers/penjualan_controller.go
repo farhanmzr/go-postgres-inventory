@@ -12,11 +12,12 @@ import (
 	"go-postgres-inventory/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type SalesRequestInput struct {
-	TransCode   string      `json:"trans_code"`  // dari UI boleh isi nomor transaksi (opsional), kalau kosong server generate
 	ManualCode  *string     `json:"manual_code"` // biarkan null; admin yang isi nanti
 	SalesDate   time.Time   `json:"sales_date"`  // wajib <= today
 	Username    string      `json:"username"`    // auto nama user
@@ -96,7 +97,24 @@ func CreatePenjualan(c *gin.Context) {
 		}
 	}
 
+	// Transaksi: generate trans_code unik per user dan simpan
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
+		// Ambil urutan berikutnya yg aman dari race:
+		// SELECT COALESCE(MAX(trans_seq),0) FOR UPDATE WHERE created_by_id = ?
+		type row struct{ Max uint }
+		var r row
+		if err := tx.
+			Table("sales_requests").
+			Select("COALESCE(MAX(trans_seq), 0) AS max").
+			Where("created_by_id = ?", userID).
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			Scan(&r).Error; err != nil {
+			return err
+		}
+
+		nextSeq := r.Max + 1
+		transCode := fmt.Sprintf("SL-%d-%d", userID, nextSeq)
+
 		// siapkan items
 		items := make([]models.SalesReqItem, 0, len(in.Items))
 		for _, it := range in.Items {
@@ -109,7 +127,8 @@ func CreatePenjualan(c *gin.Context) {
 		}
 
 		penjualanData := models.SalesRequest{
-			TransCode:   in.TransCode,
+			TransCode:   transCode,
+			TransSeq:    nextSeq,
 			ManualCode:  in.ManualCode,
 			Username:    in.Username,
 			SalesDate:   in.SalesDate,
@@ -120,21 +139,30 @@ func CreatePenjualan(c *gin.Context) {
 			Items:       items,
 			CreatedByID: userID,
 		}
-		return tx.Create(&penjualanData).Error
+		if err := tx.Create(&penjualanData).Error; err != nil {
+			// Kalau ada kemungkinan bentrok unique (sangat jarang), balas error yg proper
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				return fmt.Errorf("kode transaksi sudah dipakai, coba lagi")
+			}
+			return err
+		}
+		return nil
 	})
 
 	if err != nil {
 		// log error ke stdout juga biar ketahuan
 		fmt.Printf("PurchaseReqCreate error: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat permintaan pembelian", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat permintaan penjualan", "error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Berhasil melakukan Penjualan"})
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Berhasil melakukan Penjualan",
+	})
 }
 
 func PenjualanMyList(c *gin.Context) {
-	// --- normalize user_id from context (hindari panic) ---
 	rawID, ok := c.Get("user_id")
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "user_id tidak ditemukan"})
@@ -162,10 +190,10 @@ func PenjualanMyList(c *gin.Context) {
 		return
 	}
 
-	var rows []models.PurchaseRequest
+	var rows []models.SalesRequest
 	if err := config.DB.
 		Where("created_by_id = ?", userID).
-		Preload("Supplier").
+		Preload("Customer").
 		Preload("Warehouse").
 		Preload("Items.Barang").
 		Order("id DESC").

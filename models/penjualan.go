@@ -13,10 +13,11 @@ const (
 
 type SalesRequest struct {
 	ID          uint          `gorm:"primaryKey" json:"id"`
-	TransCode   string        `gorm:"uniqueIndex;size:64" json:"trans_code"` // e.g. TR-2025-000123 (generate di server)
-	ManualCode  *string       `gorm:"size:40" json:"manual_code"`            // opsional, admin isi
+	TransCode   string        `gorm:"uniqueIndex:idx_sales_trans_code;size:64" json:"trans_code"`
+	TransSeq    uint          `gorm:"index:idx_sales_user_seq,unique" json:"trans_seq"` // <— angka urut
+	ManualCode  *string       `gorm:"size:40" json:"manual_code"`
 	Username    string        `gorm:"size:180;not null" json:"username"`
-	SalesDate   time.Time     `json:"sales_date"` // tanggal (<= today)
+	SalesDate   time.Time     `json:"sales_date"`
 	WarehouseID uint          `json:"warehouse_id"`
 	Warehouse   Gudang        `json:"warehouse"`
 	CustomerID  uint          `json:"customer_id"`
@@ -26,11 +27,10 @@ type SalesRequest struct {
 	Status       SalesStatus `gorm:"size:12;index" json:"status"`
 	RejectReason *string     `gorm:"size:255" json:"reject_reason"`
 
-	Items []SalesReqItem `json:"items"`
-
-	CreatedByID uint      `json:"created_by_id"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	Items       []SalesReqItem `json:"items"`
+	CreatedByID uint           `gorm:"index:idx_sales_user_seq,unique" json:"created_by_id"` // <— ikut composite unique
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
 type SalesReqItem struct {
