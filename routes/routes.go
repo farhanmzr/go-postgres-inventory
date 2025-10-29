@@ -128,7 +128,7 @@ func SetupRoutes(r *gin.Engine) {
 				}
 				penjualan := userAuth.Group("/penjualan", middlewares.RequirePerm("SALES"))
 				{
-					penjualan.GET("/", controllers.SalesReqPendingList)
+					penjualan.GET("/", controllers.SalesReqList)
 					penjualan.POST("/", controllers.CreatePenjualan)
 					penjualan.GET("/invoice/:id", controllers.SalesInvoiceDetail)
 				}
