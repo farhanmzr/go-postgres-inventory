@@ -178,56 +178,56 @@ func CreatePenjualan(c *gin.Context) {
 	})
 }
 
-// controllers/sales_request_user.go
-func SalesReqList(c *gin.Context) {
-    // --- ambil user_id aman dari context ---
-    rawID, ok := c.Get("user_id")
-    if !ok {
-        c.JSON(http.StatusUnauthorized, gin.H{"message": "user_id tidak ditemukan"})
-        return
-    }
-    var userID uint
-    switch v := rawID.(type) {
-    case uint: userID = v
-    case int: userID = uint(v)
-    case int64: userID = uint(v)
-    case float64: userID = uint(v)
-    case string:
-        if n, err := strconv.ParseUint(v, 10, 64); err == nil {
-            userID = uint(n)
-        } else {
-            c.JSON(http.StatusUnauthorized, gin.H{"message": "user_id tidak valid"})
-            return
-        }
-    default:
-        c.JSON(http.StatusUnauthorized, gin.H{"message": "user_id tidak valid"})
-        return
-    }
+func SalesReqUserList(c *gin.Context) {
+	status := strings.ToUpper(strings.TrimSpace(c.Query("status")))
+	switch status {
+	case string(models.StatusPending), string(models.StatusApproved), string(models.StatusRejected):
+	default:
+		status = string(models.StatusPending)
+	}
 
-    // ?status=PENDING|APPROVED|REJECTED|ALL (default: ALL)
-    status := strings.TrimSpace(strings.ToUpper(c.Query("status")))
-    qb := config.DB.
-        Where("created_by_id = ?", userID).
-        Preload("Customer").Preload("Warehouse").Preload("Items.Barang").
-        Order("id DESC")
+	// ambil user_id dari context
+	rawID, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "user_id tidak ditemukan"})
+		return
+	}
+	var userID uint
+	switch v := rawID.(type) {
+	case uint:
+		userID = v
+	case int:
+		userID = uint(v)
+	case int64:
+		userID = uint(v)
+	case float64:
+		userID = uint(v)
+	case string:
+		if n, err := strconv.ParseUint(v, 10, 64); err == nil {
+			userID = uint(n)
+		} else {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "user_id tidak valid"})
+			return
+		}
+	default:
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "user_id tidak valid"})
+		return
+	}
 
-    switch status {
-    case "PENDING", "APPROVED", "REJECTED":
-        qb = qb.Where("status = ?", status)
-    case "", "ALL":
-        // tanpa filter status
-    default:
-        c.JSON(http.StatusBadRequest, gin.H{"message": "status tidak valid"})
-        return
-    }
+	var rows []models.SalesRequest
+	if err := config.DB.Preload("Customer").
+		Preload("Warehouse").
+		Preload("Items.Barang").
+		Where("status = ? AND created_by_id = ?", status, userID).
+		Order("id DESC").
+		Find(&rows).Error; err != nil {
+		c.JSON(500, gin.H{"message": "Gagal mengambil data", "error": err.Error()})
+		return
+	}
 
-    var rows []models.SalesRequest
-    if err := qb.Find(&rows).Error; err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengambil data", "error": err.Error()})
-        return
-    }
-    c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil data Penjualan", "data": rows})
+	c.JSON(200, gin.H{"message": "Berhasil mengambil data Penjualan", "data": rows})
 }
+
 
 
 func SalesInvoiceDetail(c *gin.Context) {

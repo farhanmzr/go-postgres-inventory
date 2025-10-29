@@ -19,16 +19,32 @@ type RejectBody struct {
 	Reason string `json:"reason" binding:"required"`
 }
 
-func SalesReqPendingList(c *gin.Context) {
+// controllers/purchase_request_admin.go
+
+func SalesReqAdminList(c *gin.Context) {
+	status := strings.ToUpper(strings.TrimSpace(c.Query("status")))
+	// hanya izinkan 3 status
+	switch status {
+	case string(models.StatusPending), string(models.StatusApproved), string(models.StatusRejected):
+		// ok
+	default:
+		// default: PENDING (atau 400 kalau mau strict)
+		status = string(models.StatusPending)
+	}
+
 	var rows []models.SalesRequest
-	if err := config.DB.Preload("Customer").Preload("Warehouse").Preload("Items.Barang").
-		Where("status = ?", models.StatusPending).Order("id DESC").
+	if err := config.DB.Preload("Customer").
+		Preload("Warehouse").
+		Preload("Items.Barang").
+		Where("status = ?", status).
+		Order("id DESC").
 		Find(&rows).Error; err != nil {
 		c.JSON(500, gin.H{"message": "Gagal mengambil data", "error": err.Error()})
 		return
 	}
 	c.JSON(200, gin.H{"message": "Berhasil mengambil semua data Penjualan", "data": rows})
 }
+
 
 var (
 	errNotFound             = errors.New("NOT_FOUND")

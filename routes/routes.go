@@ -91,7 +91,7 @@ func SetupRoutes(r *gin.Engine) {
 			}
 			penjualan := adminAuth.Group("/penjualan")
 			{
-				penjualan.GET("/", controllers.SalesReqPendingList)
+				penjualan.GET("/", controllers.SalesReqAdminList)
 				penjualan.POST("/:id/approve", controllers.SalesReqApprove)
 				penjualan.POST("/:id/reject", controllers.SalesReqReject)
 				penjualan.GET("/invoice/:id", controllers.SalesInvoiceDetail)
@@ -128,7 +128,7 @@ func SetupRoutes(r *gin.Engine) {
 				}
 				penjualan := userAuth.Group("/penjualan", middlewares.RequirePerm("SALES"))
 				{
-					penjualan.GET("/", controllers.SalesReqList)
+					penjualan.GET("/", controllers.SalesReqUserList)
 					penjualan.POST("/", controllers.CreatePenjualan)
 					penjualan.GET("/invoice/:id", controllers.SalesInvoiceDetail)
 				}
