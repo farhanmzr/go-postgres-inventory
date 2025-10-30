@@ -29,7 +29,6 @@ type UsageItemInput struct {
 	Note     *string `json:"note"`
 }
 
-
 func UsageCreate(c *gin.Context) {
 	var in UsageCreateInput
 	if err := c.ShouldBindJSON(&in); err != nil {
@@ -163,14 +162,18 @@ func UsageMyList(c *gin.Context) {
 		return
 	}
 
+	// controllers/usage_controller.go (fungsi UsageMyList)
 	var rows []models.UsageRequest
-	if err := config.DB.
+	err := config.DB.
 		Where("created_by_id = ?", userID).
 		Preload("Warehouse").
 		Preload("Customer").
-		Preload("Items.Barang").
+		Preload("Items").          // ⬅️ tambahkan ini
+		Preload("Items.Barang").   // ⬅️ ini baru jalan karena field-nya ada
+		Preload("Items.Customer"). // ⬅️ opsional, kalau mau ikut ditampilkan
 		Order("id DESC").
-		Find(&rows).Error; err != nil {
+		Find(&rows).Error
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "gagal mengambil data", "error": err.Error()})
 		return
 	}
