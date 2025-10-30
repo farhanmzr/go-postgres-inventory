@@ -13,19 +13,22 @@ import (
 )
 
 type UsageCreateInput struct {
-	TransCode  string           `json:"trans_code"`                    // opsional; jika kosong server generate
-	ManualCode *string          `json:"manual_code"`                   // biarkan null; admin isi kalau perlu
-	UsageDate  time.Time        `json:"usage_date" binding:"required"` // wajib <= today
-	Requester  string           `json:"requester" binding:"required"`  // auto dari user ctx nama/username
-	Items      []UsageItemInput `json:"items" binding:"required,min=1"`
+	TransCode    string           `json:"trans_code"`
+	ManualCode   *string          `json:"manual_code"`
+	UsageDate    time.Time        `json:"usage_date" binding:"required"`
+	Requester    string           `json:"requester" binding:"required"`
+	PenggunaName string           `json:"pengguna_name" binding:"required"`
+	WarehouseID  uint             `json:"warehouse_id" binding:"required"`
+	CustomerID   uint             `json:"customer_id" binding:"required"`
+	Items        []UsageItemInput `json:"items" binding:"required,min=1"`
 }
 
 type UsageItemInput struct {
-	BarangID   uint    `json:"barang_id" binding:"required"`
-	CustomerID uint    `json:"customer_id" binding:"required"`
-	Qty        int64   `json:"qty" binding:"required,gt=0"`
-	Note       *string `json:"note"`
+	BarangID uint    `json:"barang_id" binding:"required"`
+	Qty      int64   `json:"qty" binding:"required,gt=0"`
+	Note     *string `json:"note"`
 }
+
 
 func UsageCreate(c *gin.Context) {
 	var in UsageCreateInput
@@ -69,39 +72,48 @@ func UsageCreate(c *gin.Context) {
 		return
 	}
 
-	// validasi FK barang & customer
+	/// validasi FK gudang & customer
+	var cnt int64
+	if err := config.DB.Model(&models.Gudang{}).Where("id = ?", in.WarehouseID).Count(&cnt).Error; err != nil || cnt == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Gudang tidak ditemukan"})
+		return
+	}
+	if err := config.DB.Model(&models.Customer{}).Where("id = ?", in.CustomerID).Count(&cnt).Error; err != nil || cnt == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Customer tidak ditemukan"})
+		return
+	}
+
+	// validasi barang ada di gudang tsb (opsional, tapi bagus)
 	for i, it := range in.Items {
-		var cnt int64
-		if err := config.DB.Model(&models.Barang{}).Where("id = ?", it.BarangID).Count(&cnt).Error; err != nil || cnt == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"message": fmt.Sprintf("barang index %d tidak ditemukan", i)})
-			return
-		}
-		if err := config.DB.Model(&models.Customer{}).Where("id = ?", it.CustomerID).Count(&cnt).Error; err != nil || cnt == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"message": fmt.Sprintf("customer index %d tidak ditemukan", i)})
+		var exist int64
+		if err := config.DB.Model(&models.Barang{}).
+			Where("id = ? AND gudang_id = ?", it.BarangID, in.WarehouseID).
+			Count(&exist).Error; err != nil || exist == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": fmt.Sprintf("Barang index %d tidak ditemukan di gudang %d", i, in.WarehouseID)})
 			return
 		}
 	}
 
-	// transaksi: insert header+items → set trans_code = ID (increment angka)
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
-		// siapkan items
 		items := make([]models.UsageItem, 0, len(in.Items))
 		for _, it := range in.Items {
 			items = append(items, models.UsageItem{
 				BarangID:   it.BarangID,
-				CustomerID: it.CustomerID,
+				CustomerID: in.CustomerID, // ambil dari header
 				Qty:        it.Qty,
 				ItemStatus: models.ItemPending,
 				Note:       it.Note,
 			})
 		}
 
-		// insert header dengan trans_code sementara (unik)
 		u := models.UsageRequest{
 			TransCode:     fmt.Sprintf("tmp-%d", time.Now().UnixNano()),
 			ManualCode:    in.ManualCode,
 			UsageDate:     in.UsageDate,
 			RequesterName: in.Requester,
+			PenggunaName:  in.PenggunaName,
+			WarehouseID:   in.WarehouseID,
+			CustomerID:    in.CustomerID,
 			CreatedByID:   userID,
 			Status:        models.UsageBelumDiproses,
 			Items:         items,
@@ -109,23 +121,16 @@ func UsageCreate(c *gin.Context) {
 		if err := tx.Create(&u).Error; err != nil {
 			return err
 		}
-
-		// ganti ke increment angka = ID (aman, konsisten)
 		code := fmt.Sprintf("%d", u.ID)
-		if err := tx.Model(&models.UsageRequest{}).
+		return tx.Model(&models.UsageRequest{}).
 			Where("id = ?", u.ID).
-			Update("trans_code", code).Error; err != nil {
-			return err
-		}
-
-		return nil
+			Update("trans_code", code).Error
 	})
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "gagal membuat pemakaian", "error": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusCreated, gin.H{"message": "pemakaian dibuat (BELUM_DIPROSES)"})
 }
 
@@ -161,13 +166,13 @@ func UsageMyList(c *gin.Context) {
 	var rows []models.UsageRequest
 	if err := config.DB.
 		Where("created_by_id = ?", userID).
+		Preload("Warehouse").
+		Preload("Customer").
 		Preload("Items.Barang").
-		Preload("Items.Customer").
 		Order("id DESC").
 		Find(&rows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "gagal mengambil data", "error": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"data": rows})
 }

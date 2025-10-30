@@ -23,8 +23,15 @@ type UsageRequest struct {
 	ManualCode    *string     `json:"manual_code"`
 	UsageDate     time.Time   `gorm:"not null" json:"usage_date"`
 	RequesterName string      `gorm:"not null" json:"requester_name"`
-	CreatedByID   uint        `gorm:"not null" json:"created_by_id"`
-	Status        UsageStatus `gorm:"type:text;not null;default:BELUM_DIPROSES" json:"status"`
+	PenggunaName  string      `gorm:"not null" json:"pengguna_name"` // ⬅️ baru
+
+	WarehouseID uint     `json:"warehouse_id"`
+	Warehouse   Gudang   `json:"warehouse"`
+	CustomerID  uint     `json:"customer_id"`
+	Customer    Customer `json:"customer"`
+
+	CreatedByID uint        `gorm:"not null" json:"created_by_id"`
+	Status      UsageStatus `gorm:"type:text;not null;default:BELUM_DIPROSES" json:"status"`
 
 	Items []UsageItem `json:"items"`
 
@@ -36,14 +43,11 @@ type UsageItem struct {
 	ID             uint            `gorm:"primaryKey" json:"id"`
 	UsageRequestID uint            `gorm:"index;not null" json:"usage_request_id"`
 	BarangID       uint            `gorm:"not null" json:"barang_id"`
-	CustomerID     uint            `gorm:"not null" json:"customer_id"`
+	CustomerID     uint            `gorm:"not null" json:"customer_id"` // diisi dari header
 	Qty            int64           `gorm:"not null" json:"qty"`
 	ItemStatus     UsageItemStatus `gorm:"type:text;not null;default:PENDING" json:"item_status"`
 	StockApplied   bool            `gorm:"not null;default:false" json:"stock_applied"`
 	Note           *string         `json:"note"`
-
-	Barang   *Barang   `json:"barang,omitempty"`
-	Customer *Customer `json:"customer,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
