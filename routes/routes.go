@@ -8,6 +8,7 @@ import (
 )
 
 func SetupRoutes(r *gin.Engine) {
+
 	api := r.Group("/api")
 	{
 
@@ -96,6 +97,16 @@ func SetupRoutes(r *gin.Engine) {
 				penjualan.POST("/:id/reject", controllers.SalesReqReject)
 				penjualan.GET("/invoice/:id", controllers.SalesInvoiceDetail)
 			}
+			reports := adminAuth.Group("/reports")
+			{
+				reports.GET("/barang", controllers.ReportBarang)
+
+				// Laporan stok per grup barang (WAJIB :id = grup_id)
+				reports.GET("/stock/grup/:id", controllers.ReportStockPerGrup)
+
+				// Laporan stok per gudang (WAJIB :id = gudang_id)
+				reports.GET("/stock/gudang/:id", controllers.ReportStockPerGudang)
+			}
 		}
 
 		// ================= USER (customer) APP =================
@@ -179,6 +190,13 @@ func SetupRoutes(r *gin.Engine) {
 					supplier.POST("/", middlewares.RequirePerm("CREATE_SUPPLIER"), controllers.CreateSupplier)
 					// supplier.PUT("/:id", controllers.UpdateSupplier)
 					// supplier.DELETE("/:id", controllers.DeleteSupplier)
+				}
+
+				reports := userAuth.Group("/reports", middlewares.RequirePerm("REPORT_STOCK_VIEW"))
+				{
+					reports.GET("/barang", controllers.ReportBarang)
+					reports.GET("/stock/grup/:id", controllers.ReportStockPerGrup)
+					reports.GET("/stock/gudang/:id", controllers.ReportStockPerGudang)
 				}
 
 			}
