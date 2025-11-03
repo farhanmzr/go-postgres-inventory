@@ -113,7 +113,7 @@ func CreatePembelian(c *gin.Context) {
 		}
 
 		// 2) Insert PurchaseRequest (header)
-		pembelianData := models.PurchaseRequest{
+		pembelianData = models.PurchaseRequest{
 			TransCode:    in.TransCode,
 			ManualCode:   in.ManualCode,
 			BuyerName:    in.BuyerName,
@@ -165,7 +165,7 @@ func CreatePembelian(c *gin.Context) {
 		tax := int64(0)
 		grand := subtotal - discount + tax
 
-		inv := models.PurchaseInvoice{
+		inv = models.PurchaseInvoice{
 			PurchaseRequestID: pembelianData.ID,
 			InvoiceNo:         pembelianData.TransCode, // nomor transaksi = transcode pembelian
 			BuyerName:         pembelianData.BuyerName,
