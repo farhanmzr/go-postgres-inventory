@@ -13,7 +13,6 @@ import (
 
 
 func currentUserID(c *gin.Context) (uint, error) {
-	// Sesuaikan key dengan middleware-mu
 	v, ok := c.Get("user_id")
 	if !ok {
 		return 0, errors.New("user_id tidak ada di context")
