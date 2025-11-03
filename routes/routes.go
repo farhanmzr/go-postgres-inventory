@@ -100,12 +100,14 @@ func SetupRoutes(r *gin.Engine) {
 			reports := adminAuth.Group("/reports")
 			{
 				reports.GET("/barang", controllers.ReportBarang)
-
-				// Laporan stok per grup barang (WAJIB :id = grup_id)
 				reports.GET("/stock/grup/:id", controllers.ReportStockPerGrup)
-
-				// Laporan stok per gudang (WAJIB :id = gudang_id)
 				reports.GET("/stock/gudang/:id", controllers.ReportStockPerGudang)
+				reports.GET("/purchases", controllers.ReportPurchasesAdmin)
+				reports.GET("/sales", controllers.ReportSalesAdmin)
+				reports.GET("/usage", controllers.ReportUsageAdmin)
+				reports.GET("/permintaan", controllers.ReportPermintaanAdmin)
+				reports.GET("/profit/barang", controllers.ReportProfitPerBarangAdmin)
+
 			}
 		}
 
@@ -197,8 +199,12 @@ func SetupRoutes(r *gin.Engine) {
 					reports.GET("/barang", controllers.ReportBarang)
 					reports.GET("/stock/grup/:id", controllers.ReportStockPerGrup)
 					reports.GET("/stock/gudang/:id", controllers.ReportStockPerGudang)
+					reports.GET("/purchases", controllers.ReportPurchasesUser)
+					reports.GET("/sales", controllers.ReportSalesUser)
+					reports.GET("/usage", controllers.ReportUsageUser)
+					reports.GET("/permintaan", controllers.ReportPermintaanUser)
+					reports.GET("/profit/barang", controllers.ReportProfitPerBarangUser)
 				}
-
 			}
 		}
 
