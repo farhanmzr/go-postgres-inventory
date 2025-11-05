@@ -107,7 +107,6 @@ func SetupRoutes(r *gin.Engine) {
 				reports.GET("/usage", controllers.ReportUsageAdmin)
 				reports.GET("/permintaan", controllers.ReportPermintaanAdmin)
 				reports.GET("/profit/barang", controllers.ReportProfitPerBarangAdmin)
-
 			}
 		}
 

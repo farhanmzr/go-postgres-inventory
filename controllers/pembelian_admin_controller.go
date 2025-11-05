@@ -9,7 +9,7 @@ import (
 )
 
 func PurchaseReqList(c *gin.Context) {
-	var rows []models.SalesRequest
+	var rows []models.PurchaseRequest
 	if err := config.DB.Preload("Supplier").Preload("Warehouse").Preload("Items.Barang").Order("id DESC").
 		Find(&rows).Error; err != nil {
 		c.JSON(500, gin.H{"message": "Gagal mengambil data", "error": err.Error()})
