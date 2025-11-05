@@ -32,15 +32,15 @@ func SetupRoutes(r *gin.Engine) {
 			adminAuth.PUT("/users/:userID/permissions", controllers.AdminSetUserPermissions)
 			adminAuth.GET("/permissions", controllers.AdminListPermissions)
 
+			// Permintaan
 			adminAuth.GET("/permintaan", controllers.AdminGetAllPermintaan)
 
-			adminPemakaian := adminAuth.Group("/admin/pemakaian")
+			adminPemakaian := adminAuth.Group("/pemakaian")
 			{
 				adminPemakaian.GET("/:id", controllers.UsageDetail)              // detail header+items
 				adminPemakaian.POST("/item/decide", controllers.UsageItemDecide) // approve/reject per item
 			}
 
-			// Resource ADMIN lainnya (semua di bawah /api/admin/**)
 			customer := adminAuth.Group("/customer")
 			{
 				customer.GET("/", controllers.GetAllCustomer)
