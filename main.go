@@ -40,6 +40,9 @@ func main() {
 		&models.SalesReqItem{},
 		&models.SalesInvoice{},
 		&models.SalesInvoiceItem{},
+
+		&models.Piutang{},
+		&models.PiutangItem{},
 	); err != nil {
 		log.Fatalf("❌ AutoMigrate error: %v", err)
 	}

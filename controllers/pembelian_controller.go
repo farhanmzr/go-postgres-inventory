@@ -181,6 +181,45 @@ func CreatePembelian(c *gin.Context) {
 			return err
 		}
 
+		// 6) Jika payment CREDIT -> buat Piutang
+		if pembelianData.Payment == models.PaymentCredit {
+			due := inv.InvoiceDate.AddDate(0, 0, 7)
+
+			// siapkan items snapshot dari invoice
+			piuItems := make([]models.PiutangItem, 0, len(invItems))
+			for _, iv := range invItems {
+				// ambil nama & kode barang untuk snapshot
+				var b models.Barang
+				if err := tx.Select("id, nama, kode").First(&b, iv.BarangID).Error; err != nil {
+					return err
+				}
+				piuItems = append(piuItems, models.PiutangItem{
+					BarangID:  iv.BarangID,
+					Nama:      b.Nama,
+					Kode:      b.Kode,
+					Qty:       iv.Qty,
+					Price:     iv.Price,
+					LineTotal: iv.LineTotal,
+				})
+			}
+
+			piu := models.Piutang{
+				UserID:      userID,
+				UserName:    pembelianData.BuyerName,       // display
+				Source:      models.CreditFromPurchase,
+				SourceID:    inv.PurchaseRequestID,         // invoice PK = PurchaseRequestID
+				InvoiceNo:   inv.InvoiceNo,
+				InvoiceDate: inv.InvoiceDate,
+				DueDate:     due,
+				Total:       inv.GrandTotal,
+				Status:      models.CreditUnpaid,
+				Items:       piuItems,
+			}
+			if err := tx.Create(&piu).Error; err != nil {
+				return err
+			}
+		}
+
 		return nil
 
 	})

@@ -45,7 +45,6 @@ func SalesReqAdminList(c *gin.Context) {
 	c.JSON(200, gin.H{"message": "Berhasil mengambil semua data Penjualan", "data": rows})
 }
 
-
 var (
 	errNotFound             = errors.New("NOT_FOUND")
 	errBadStatus            = errors.New("BAD_STATUS")
@@ -151,6 +150,43 @@ func SalesReqApprove(c *gin.Context) {
 		}
 		if err := tx.Create(&inv).Error; err != nil {
 			return err
+		}
+
+		// 5) Jika payment CREDIT -> buat Piutang
+		if pr.Payment == models.PaymentCredit {
+			due := inv.InvoiceDate.AddDate(0, 0, 7)
+
+			piuItems := make([]models.PiutangItem, 0, len(invItems))
+			for _, iv := range invItems {
+				var b models.Barang
+				if err := tx.Select("id, nama, kode").First(&b, iv.BarangID).Error; err != nil {
+					return err
+				}
+				piuItems = append(piuItems, models.PiutangItem{
+					BarangID:  iv.BarangID,
+					Nama:      b.Nama,
+					Kode:      b.Kode,
+					Qty:       iv.Qty,
+					Price:     iv.Price, // harga jual per unit
+					LineTotal: iv.LineTotal,
+				})
+			}
+
+			piu := models.Piutang{
+				UserID:      pr.CreatedByID, // pemilik (user yang membuat sales)
+				UserName:    pr.Username,    // display
+				Source:      models.CreditFromSales,
+				SourceID:    inv.SalesRequestID, // invoice PK = SalesRequestID
+				InvoiceNo:   inv.InvoiceNo,
+				InvoiceDate: inv.InvoiceDate,
+				DueDate:     due,
+				Total:       inv.GrandTotal,
+				Status:      models.CreditUnpaid,
+				Items:       piuItems,
+			}
+			if err := tx.Create(&piu).Error; err != nil {
+				return err
+			}
 		}
 
 		return nil

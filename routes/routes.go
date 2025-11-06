@@ -108,6 +108,11 @@ func SetupRoutes(r *gin.Engine) {
 				reports.GET("/permintaan", controllers.ReportPermintaanAdmin)
 				reports.GET("/profit/barang", controllers.ReportProfitPerBarangAdmin)
 			}
+			piutangAdmin := adminAuth.Group("/piutang")
+			{
+				piutangAdmin.GET("/", controllers.PiutangListAdmin)
+				piutangAdmin.POST("/:id/approve", controllers.PiutangApprovePayment)
+			}
 		}
 
 		// ================= USER (customer) APP =================
@@ -203,6 +208,12 @@ func SetupRoutes(r *gin.Engine) {
 					reports.GET("/usage", controllers.ReportUsageUser)
 					reports.GET("/permintaan", controllers.ReportPermintaanUser)
 					reports.GET("/profit/barang", controllers.ReportProfitPerBarangUser)
+				}
+
+				piutangUser := userAuth.Group("/piutang")
+				{
+					piutangUser.GET("/", controllers.PiutangListUser)
+					piutangUser.POST("/:id/pay", controllers.PiutangRequestPay)
 				}
 			}
 		}
