@@ -143,3 +143,16 @@ func UsageDetail(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"data": row})
 }
+
+func AdminGetAllPemakaian(c *gin.Context) {
+	
+	var grups []models.UsageRequest
+	if err := config.DB.
+		Order("id DESC").
+		Find(&grups).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengambil data", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": grups})
+}

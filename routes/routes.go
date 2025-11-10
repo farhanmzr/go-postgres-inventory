@@ -39,6 +39,7 @@ func SetupRoutes(r *gin.Engine) {
 			{
 				adminPemakaian.GET("/:id", controllers.UsageDetail)              // detail header+items
 				adminPemakaian.POST("/item/decide", controllers.UsageItemDecide) // approve/reject per item
+				adminPemakaian.GET("/", controllers.AdminGetAllPemakaian)
 			}
 
 			customer := adminAuth.Group("/customer")
