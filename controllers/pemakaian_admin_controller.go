@@ -145,9 +145,14 @@ func UsageDetail(c *gin.Context) {
 }
 
 func AdminGetAllPemakaian(c *gin.Context) {
-	
+
 	var grups []models.UsageRequest
 	if err := config.DB.
+		Preload("Warehouse").
+		Preload("Customer").
+		Preload("Items").          // ⬅️ tambahkan ini
+		Preload("Items.Barang").   // ⬅️ ini baru jalan karena field-nya ada
+		Preload("Items.Customer"). // ⬅️ opsional, kalau mau ikut ditampilkan
 		Order("id DESC").
 		Find(&grups).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengambil data", "error": err.Error()})
