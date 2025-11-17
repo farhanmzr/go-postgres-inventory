@@ -26,6 +26,13 @@ func CreateGudang(c *gin.Context) {
 		return
 	}
 
+	// Cek apakah kode gudang sudah ada
+	var exist models.Gudang
+	if err := config.DB.Where("kode = ?", input.Kode).First(&exist).Error; err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Kode gudang sudah digunakan"})
+		return
+	}
+
 	gudang := models.Gudang{
 		Nama:     input.Nama,
 		Kode:     input.Kode,
@@ -95,6 +102,13 @@ func UpdateGudang(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Data tidak valid"})
+		return
+	}
+
+	// Cek apakah kode gudang sudah ada
+	var exist models.Gudang
+	if err := config.DB.Where("kode = ?", input.Kode).First(&exist).Error; err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Kode gudang sudah digunakan"})
 		return
 	}
 

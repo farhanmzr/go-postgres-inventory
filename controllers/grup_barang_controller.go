@@ -20,6 +20,13 @@ func CreateGrupBarang(c *gin.Context) {
         return
     }
 
+    // Cek apakah kode grup barang sudah ada
+	var exist models.GrupBarang
+	if err := config.DB.Where("kode = ?", input.Kode).First(&exist).Error; err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Kode grup barang sudah digunakan"})
+		return
+	}
+
     grupBarang := models.GrupBarang{
         Nama: input.Nama,
         Kode: input.Kode,
@@ -81,6 +88,13 @@ func UpdateGrupBarang(c *gin.Context) {
         c.JSON(http.StatusBadRequest, gin.H{"error": "Data tidak valid"})
         return
     }
+
+    // Cek apakah kode grup barang sudah ada
+	var exist models.GrupBarang
+	if err := config.DB.Where("kode = ?", input.Kode).First(&exist).Error; err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Kode grup barang sudah digunakan"})
+		return
+	}
 
     updateData := models.GrupBarang{
         Nama: input.Nama,
