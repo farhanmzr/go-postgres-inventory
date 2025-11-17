@@ -47,8 +47,8 @@ func SetupRoutes(r *gin.Engine) {
 				customer.GET("/", controllers.GetAllCustomer)
 				customer.GET("/:id", controllers.GetCustomerByID)
 				customer.POST("/", controllers.CreateCustomer)
-				customer.PUT("/:id", controllers.UpdateBarang)
-				customer.DELETE("/:id", controllers.DeleteBarang)
+				customer.PUT("/:id", controllers.UpdateCustomer)
+				customer.DELETE("/:id", controllers.DeleteCustomer)
 			}
 
 			barang := adminAuth.Group("/barang")
