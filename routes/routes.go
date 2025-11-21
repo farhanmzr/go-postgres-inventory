@@ -57,6 +57,7 @@ func SetupRoutes(r *gin.Engine) {
 				barang.GET("/:id", controllers.GetBarangByID)
 				barang.POST("/", controllers.CreateBarang)
 				barang.PUT("/:id", controllers.UpdateBarang)
+				barang.PUT("/:id", controllers.UpdateStokBarang)
 				barang.DELETE("/:id", controllers.DeleteBarang)
 			}
 

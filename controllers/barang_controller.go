@@ -120,9 +120,7 @@ func UpdateBarang(c *gin.Context) {
 		Merek        string  `json:"merek"`
 		MadeIn       string  `json:"made_in"`
 		GrupBarangID uint    `json:"grup_barang_id"`
-		HargaBeli    float64 `json:"harga_beli"`
 		HargaJual    float64 `json:"harga_jual"`
-		Stok         int     `json:"stok"`
 		StokMinimal  int     `json:"stok_minimal"`
 	}
 
@@ -140,19 +138,18 @@ func UpdateBarang(c *gin.Context) {
 		}
 	}
 
-	updateData := models.Barang{
-		Nama:         input.Nama,
-		Kode:         input.Kode,
-		GudangID:     input.GudangID,
-		LokasiSusun:  input.LokasiSusun,
-		Satuan:       input.Satuan,
-		Merek:        input.Merek,
-		MadeIn:       input.MadeIn,
-		GrupBarangID: input.GrupBarangID,
-		HargaBeli:    input.HargaBeli,
-		HargaJual:    input.HargaJual,
-		Stok:         input.Stok,
-		StokMinimal:  input.StokMinimal,
+	// Pakai map supaya lebih fleksibel, dan tidak sentuh field stok
+	updateData := map[string]any{
+		"nama":          input.Nama,
+		"kode":          input.Kode,
+		"gudang_id":     input.GudangID,
+		"lokasi_susun":  input.LokasiSusun,
+		"satuan":        input.Satuan,
+		"merek":         input.Merek,
+		"made_in":       input.MadeIn,
+		"grup_barang_id": input.GrupBarangID,
+		"harga_jual":    input.HargaJual,
+		"stok_minimal":  input.StokMinimal,
 	}
 
 	if err := config.DB.Model(&barang).Updates(updateData).Error; err != nil {
@@ -165,6 +162,87 @@ func UpdateBarang(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Barang berhasil diupdate", "data": barang})
 }
+
+func UpdateStokBarang(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak valid"})
+		return
+	}
+
+	var barang models.Barang
+	if err := config.DB.First(&barang, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Barang tidak ditemukan"})
+		return
+	}
+
+	var input struct {
+		Stok   int    `json:"stok" binding:"required"`
+		Alasan string `json:"alasan" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Data tidak valid"})
+		return
+	}
+
+	// --- normalize user_id ---
+	rawID, _ := c.Get("user_id")
+	var userID uint
+	switch v := rawID.(type) {
+	case uint:
+		userID = v
+	case int:
+		userID = uint(v)
+	case int64:
+		userID = uint(v)
+	case float64:
+		userID = uint(v)
+	case string:
+		if n, err := strconv.ParseUint(v, 10, 64); err == nil {
+			userID = uint(n)
+		}
+	default:
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "user_id tidak valid"})
+		return
+	}
+
+	oldStok := barang.Stok
+	newStok := input.Stok
+
+	err = config.DB.Transaction(func(tx *gorm.DB) error {
+
+		if err := tx.Model(&barang).Update("stok", newStok).Error; err != nil {
+			return err
+		}
+
+		history := models.StockHistory{
+			BarangID:    barang.ID,
+			OldStok:     oldStok,
+			NewStok:     newStok,
+			Selisih:     newStok - oldStok,
+			Alasan:      input.Alasan,
+			CreatedByID: userID, // << simpan siapa yang update
+		}
+
+		if err := tx.Create(&history).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Stok barang berhasil diupdate",
+	})
+}
+
 
 func DeleteBarang(c *gin.Context) {
 	idParam := c.Param("id")

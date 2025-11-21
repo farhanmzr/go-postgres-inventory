@@ -25,6 +25,7 @@ func main() {
 		&models.Gudang{},
 		&models.GrupBarang{},
 		&models.Barang{},
+		&models.StockHistory{},
 		&models.Supplier{},
 		&models.Customer{},
 
