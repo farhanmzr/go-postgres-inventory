@@ -140,16 +140,16 @@ func UpdateBarang(c *gin.Context) {
 
 	// Pakai map supaya lebih fleksibel, dan tidak sentuh field stok
 	updateData := map[string]any{
-		"nama":          input.Nama,
-		"kode":          input.Kode,
-		"gudang_id":     input.GudangID,
-		"lokasi_susun":  input.LokasiSusun,
-		"satuan":        input.Satuan,
-		"merek":         input.Merek,
-		"made_in":       input.MadeIn,
+		"nama":           input.Nama,
+		"kode":           input.Kode,
+		"gudang_id":      input.GudangID,
+		"lokasi_susun":   input.LokasiSusun,
+		"satuan":         input.Satuan,
+		"merek":          input.Merek,
+		"made_in":        input.MadeIn,
 		"grup_barang_id": input.GrupBarangID,
-		"harga_jual":    input.HargaJual,
-		"stok_minimal":  input.StokMinimal,
+		"harga_jual":     input.HargaJual,
+		"stok_minimal":   input.StokMinimal,
 	}
 
 	if err := config.DB.Model(&barang).Updates(updateData).Error; err != nil {
@@ -158,7 +158,6 @@ func UpdateBarang(c *gin.Context) {
 	}
 
 	config.DB.Preload("Gudang").Preload("GrupBarang").First(&barang, barang.ID)
-
 
 	c.JSON(http.StatusOK, gin.H{"message": "Barang berhasil diupdate", "data": barang})
 }
@@ -187,15 +186,14 @@ func UpdateStokBarang(c *gin.Context) {
 		return
 	}
 
-	// ✅ pakai helper yang sama seperti CreatePermintaan
-    uid, err := currentUserID(c)
-    if err != nil {
-        c.JSON(http.StatusUnauthorized, gin.H{
-            "message": "Unauthorized",
-            "error":   err.Error(),
-        })
-        return
-    }
+	uid, err := currentAdminID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "Unauthorized",
+			"error":   err.Error(),
+		})
+		return
+	}
 
 	oldStok := barang.Stok
 	newStok := input.Stok
@@ -233,60 +231,58 @@ func UpdateStokBarang(c *gin.Context) {
 }
 
 func GetStockHistoryByBarang(c *gin.Context) {
-    idParam := c.Param("id")
-    id, err := strconv.Atoi(idParam)
-    if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak valid"})
-        return
-    }
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak valid"})
+		return
+	}
 
-    // Optional: pagination via ?page=1&limit=20
-    pageStr := c.DefaultQuery("page", "1")
-    limitStr := c.DefaultQuery("limit", "20")
+	// Optional: pagination via ?page=1&limit=20
+	pageStr := c.DefaultQuery("page", "1")
+	limitStr := c.DefaultQuery("limit", "20")
 
-    page, _ := strconv.Atoi(pageStr)
-    limit, _ := strconv.Atoi(limitStr)
+	page, _ := strconv.Atoi(pageStr)
+	limit, _ := strconv.Atoi(limitStr)
 
-    if page < 1 {
-        page = 1
-    }
-    if limit < 1 || limit > 100 {
-        limit = 20
-    }
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
 
-    var histories []models.StockHistory
-    var total int64
+	var histories []models.StockHistory
+	var total int64
 
-    baseQuery := config.DB.Model(&models.StockHistory{}).
-        Where("barang_id = ?", id)
+	baseQuery := config.DB.Model(&models.StockHistory{}).
+		Where("barang_id = ?", id)
 
-    // Hitung total data
-    if err := baseQuery.Count(&total).Error; err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
+	// Hitung total data
+	if err := baseQuery.Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
-    // Ambil data history
-    if err := baseQuery.
-        Preload("Barang").
-        Order("created_at DESC").
-        Offset((page - 1) * limit).
-        Limit(limit).
-        Find(&histories).Error; err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
+	// Ambil data history
+	if err := baseQuery.
+		Preload("Barang").
+		Order("created_at DESC").
+		Offset((page - 1) * limit).
+		Limit(limit).
+		Find(&histories).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
-    c.JSON(http.StatusOK, gin.H{
-        "message": "History stok barang",
-        "data":    histories,
-        "page":    page,
-        "limit":   limit,
-        "total":   total,
-    })
+	c.JSON(http.StatusOK, gin.H{
+		"message": "History stok barang",
+		"data":    histories,
+		"page":    page,
+		"limit":   limit,
+		"total":   total,
+	})
 }
-
-
 
 func DeleteBarang(c *gin.Context) {
 	idParam := c.Param("id")
@@ -309,7 +305,6 @@ func DeleteBarang(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Barang berhasil dihapus"})
 }
-
 
 // response ringkas untuk list barang di gudang
 type BarangSimple struct {
@@ -394,4 +389,3 @@ func BarangByGudang(c *gin.Context) {
 		"total": total,
 	})
 }
-
