@@ -187,26 +187,15 @@ func UpdateStokBarang(c *gin.Context) {
 		return
 	}
 
-	// --- normalize user_id ---
-	rawID, _ := c.Get("user_id")
-	var userID uint
-	switch v := rawID.(type) {
-	case uint:
-		userID = v
-	case int:
-		userID = uint(v)
-	case int64:
-		userID = uint(v)
-	case float64:
-		userID = uint(v)
-	case string:
-		if n, err := strconv.ParseUint(v, 10, 64); err == nil {
-			userID = uint(n)
-		}
-	default:
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "user_id tidak valid"})
-		return
-	}
+	// ✅ pakai helper yang sama seperti CreatePermintaan
+    uid, err := currentUserID(c)
+    if err != nil {
+        c.JSON(http.StatusUnauthorized, gin.H{
+            "message": "Unauthorized",
+            "error":   err.Error(),
+        })
+        return
+    }
 
 	oldStok := barang.Stok
 	newStok := input.Stok
@@ -223,7 +212,7 @@ func UpdateStokBarang(c *gin.Context) {
 			NewStok:     newStok,
 			Selisih:     newStok - oldStok,
 			Alasan:      input.Alasan,
-			CreatedByID: userID, // << simpan siapa yang update
+			CreatedByID: uid, // << simpan siapa yang update
 		}
 
 		if err := tx.Create(&history).Error; err != nil {
