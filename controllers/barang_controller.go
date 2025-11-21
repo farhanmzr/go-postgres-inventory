@@ -225,8 +225,15 @@ func UpdateStokBarang(c *gin.Context) {
 		return
 	}
 
+	// reload barang + relasi biar data lengkap
+	config.DB.
+		Preload("Gudang").
+		Preload("GrupBarang").
+		First(&barang, barang.ID)
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Stok barang berhasil diupdate",
+		"data":    barang,
 	})
 }
 
