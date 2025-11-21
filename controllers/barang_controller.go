@@ -243,6 +243,61 @@ func UpdateStokBarang(c *gin.Context) {
 	})
 }
 
+func GetStockHistoryByBarang(c *gin.Context) {
+    idParam := c.Param("id")
+    id, err := strconv.Atoi(idParam)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak valid"})
+        return
+    }
+
+    // Optional: pagination via ?page=1&limit=20
+    pageStr := c.DefaultQuery("page", "1")
+    limitStr := c.DefaultQuery("limit", "20")
+
+    page, _ := strconv.Atoi(pageStr)
+    limit, _ := strconv.Atoi(limitStr)
+
+    if page < 1 {
+        page = 1
+    }
+    if limit < 1 || limit > 100 {
+        limit = 20
+    }
+
+    var histories []models.StockHistory
+    var total int64
+
+    baseQuery := config.DB.Model(&models.StockHistory{}).
+        Where("barang_id = ?", id)
+
+    // Hitung total data
+    if err := baseQuery.Count(&total).Error; err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    // Ambil data history
+    if err := baseQuery.
+        Preload("Barang").
+        Order("created_at DESC").
+        Offset((page - 1) * limit).
+        Limit(limit).
+        Find(&histories).Error; err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "message": "History stok barang",
+        "data":    histories,
+        "page":    page,
+        "limit":   limit,
+        "total":   total,
+    })
+}
+
+
 
 func DeleteBarang(c *gin.Context) {
 	idParam := c.Param("id")
