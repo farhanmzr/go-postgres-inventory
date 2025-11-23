@@ -36,10 +36,15 @@ func UsageCreate(c *gin.Context) {
 		return
 	}
 
-	// validasi tanggal tidak ke depan
-	today := time.Now().UTC().Truncate(24 * time.Hour)
-	if in.UsageDate.After(today) {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "tanggal pemakaian tidak boleh ke depan"})
+	// validasi tanggal tidak ke depan (gunakan UTC agar konsisten)
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+	// hari ini (tanpa jam)
+	today := time.Now().In(loc).Truncate(24 * time.Hour)
+	// tanggal request (tanpa jam)
+	reqDate := in.UsageDate.In(loc).Truncate(24 * time.Hour)
+	// kalau tanggal request > hari ini -> ke depan
+	if reqDate.After(today) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal pembelian tidak boleh ke depan"})
 		return
 	}
 

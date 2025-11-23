@@ -44,8 +44,12 @@ func CreatePembelian(c *gin.Context) {
 
 	// validasi tanggal tidak ke depan (gunakan UTC agar konsisten)
 	loc, _ := time.LoadLocation("Asia/Jakarta")
+	// hari ini (tanpa jam)
 	today := time.Now().In(loc).Truncate(24 * time.Hour)
-	if in.PurchaseDate.In(loc).After(today) {
+	// tanggal request (tanpa jam)
+	reqDate := in.PurchaseDate.In(loc).Truncate(24 * time.Hour)
+	// kalau tanggal request > hari ini -> ke depan
+	if reqDate.After(today) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal pembelian tidak boleh ke depan"})
 		return
 	}
@@ -205,9 +209,9 @@ func CreatePembelian(c *gin.Context) {
 
 			piu := models.Piutang{
 				UserID:      userID,
-				UserName:    pembelianData.BuyerName,       // display
+				UserName:    pembelianData.BuyerName, // display
 				Source:      models.CreditFromPurchase,
-				SourceID:    inv.PurchaseRequestID,         // invoice PK = PurchaseRequestID
+				SourceID:    inv.PurchaseRequestID, // invoice PK = PurchaseRequestID
 				InvoiceNo:   inv.InvoiceNo,
 				InvoiceDate: inv.InvoiceDate,
 				DueDate:     due,

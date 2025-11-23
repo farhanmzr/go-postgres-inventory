@@ -305,6 +305,51 @@ func DeleteBarang(c *gin.Context) {
 		return
 	}
 
+	// === CEK DI PEMBELIAN ===
+	var count int64
+	if err := config.DB.Model(&models.PurchaseReqItem{}).
+		Where("barang_id = ?", barang.ID).
+		Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal cek relasi pembelian"})
+		return
+	}
+	if count > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Barang sudah pernah dipakai di transaksi PEMBELIAN, tidak bisa dihapus",
+		})
+		return
+	}
+
+	// === CEK DI PENJUALAN (SESUIKAN NAMA MODELINYA) ===
+	// Contoh: models.SalesItem
+	if err := config.DB.Model(&models.SalesReqItem{}).
+		Where("barang_id = ?", barang.ID).
+		Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal cek relasi penjualan"})
+		return
+	}
+	if count > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Barang sudah pernah dipakai di transaksi PENJUALAN, tidak bisa dihapus",
+		})
+		return
+	}
+
+	// === CEK DI PEMAKAIAN ===
+	if err := config.DB.Model(&models.UsageItem{}).
+		Where("barang_id = ?", barang.ID).
+		Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal cek relasi pemakaian"})
+		return
+	}
+	if count > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Barang sudah pernah dipakai di transaksi PEMAKAIAN, tidak bisa dihapus",
+		})
+		return
+	}
+
+	// Kalau lolos semua cek, aman untuk dihapus
 	if err := config.DB.Delete(&barang).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal hapus barang"})
 		return
@@ -312,6 +357,7 @@ func DeleteBarang(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Barang berhasil dihapus"})
 }
+
 
 // response ringkas untuk list barang di gudang
 type BarangSimple struct {

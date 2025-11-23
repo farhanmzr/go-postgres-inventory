@@ -144,6 +144,65 @@ func DeleteGudang(c *gin.Context) {
 		return
 	}
 
+	var count int64
+
+	// 1) Cek masih ada barang di gudang ini atau tidak
+	if err := config.DB.Model(&models.Barang{}).
+		Where("gudang_id = ?", gudang.ID).
+		Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal cek barang di gudang"})
+		return
+	}
+	if count > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Gudang tidak bisa dihapus karena masih ada barang di dalamnya",
+		})
+		return
+	}
+
+	// 2) Cek sudah pernah dipakai di PEMBELIAN
+	if err := config.DB.Model(&models.PurchaseRequest{}).
+		Where("warehouse_id = ?", gudang.ID).
+		Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal cek transaksi pembelian"})
+		return
+	}
+	if count > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Gudang sudah pernah dipakai di transaksi PEMBELIAN, tidak bisa dihapus",
+		})
+		return
+	}
+
+	// 3) Cek sudah pernah dipakai di PEMAKAIAN
+	if err := config.DB.Model(&models.UsageRequest{}).
+		Where("warehouse_id = ?", gudang.ID).
+		Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal cek transaksi pemakaian"})
+		return
+	}
+	if count > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Gudang sudah pernah dipakai di transaksi PEMAKAIAN, tidak bisa dihapus",
+		})
+		return
+	}
+
+	// 4) Cek PENJUALAN kalau ada field warehouse_id di sana
+	if err := config.DB.Model(&models.SalesRequest{}).
+		Where("warehouse_id = ?", gudang.ID).
+		Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal cek transaksi penjualan"})
+		return
+	}
+	if count > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Gudang sudah pernah dipakai di transaksi PENJUALAN, tidak bisa dihapus",
+		})
+		return
+	}
+
+	// Kalau semua cek lolos -> aman untuk dihapus
 	if err := config.DB.Delete(&gudang).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal hapus gudang"})
 		return

@@ -43,8 +43,12 @@ func CreatePenjualan(c *gin.Context) {
 
 	// validasi tanggal tidak ke depan (gunakan UTC agar konsisten)
 	loc, _ := time.LoadLocation("Asia/Jakarta")
+	// hari ini (tanpa jam)
 	today := time.Now().In(loc).Truncate(24 * time.Hour)
-	if in.SalesDate.In(loc).After(today) {
+	// tanggal request (tanpa jam)
+	reqDate := in.SalesDate.In(loc).Truncate(24 * time.Hour)
+	// kalau tanggal request > hari ini -> ke depan
+	if reqDate.After(today) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal pembelian tidak boleh ke depan"})
 		return
 	}
@@ -227,8 +231,6 @@ func SalesReqUserList(c *gin.Context) {
 
 	c.JSON(200, gin.H{"message": "Berhasil mengambil data Penjualan", "data": rows})
 }
-
-
 
 func SalesInvoiceDetail(c *gin.Context) {
 	idStr := c.Param("id")
