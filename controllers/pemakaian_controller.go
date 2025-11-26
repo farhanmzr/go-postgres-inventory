@@ -90,10 +90,12 @@ func UsageCreate(c *gin.Context) {
 	// validasi barang ada di gudang tsb (opsional, tapi bagus)
 	for i, it := range in.Items {
 		var exist int64
-		if err := config.DB.Model(&models.Barang{}).
-			Where("id = ? AND gudang_id = ?", it.BarangID, in.WarehouseID).
+		if err := config.DB.Model(&models.GudangBarang{}).
+			Where("barang_id = ? AND gudang_id = ?", it.BarangID, in.WarehouseID).
 			Count(&exist).Error; err != nil || exist == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"message": fmt.Sprintf("Barang index %d tidak ditemukan di gudang %d", i, in.WarehouseID)})
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": fmt.Sprintf("Barang index %d tidak ditemukan di gudang %d", i, in.WarehouseID),
+			})
 			return
 		}
 	}

@@ -23,6 +23,7 @@ func main() {
 		&models.UserPermission{},
 
 		&models.Gudang{},
+		&models.GudangBarang{},
 		&models.GrupBarang{},
 		&models.Barang{},
 		&models.StockHistory{},

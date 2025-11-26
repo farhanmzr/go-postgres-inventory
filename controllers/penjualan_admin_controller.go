@@ -89,8 +89,8 @@ func SalesReqApprove(c *gin.Context) {
 
 		// 3) Kurangi stok per item (atomic) + guard gudang
 		for _, it := range pr.Items {
-			dec := tx.Model(&models.Barang{}).
-				Where("id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
+			dec := tx.Model(&models.GudangBarang{}).
+				Where("barang_id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
 				UpdateColumn("stok", gorm.Expr("stok - ?", it.Qty))
 			if dec.Error != nil {
 				return dec.Error
@@ -104,17 +104,16 @@ func SalesReqApprove(c *gin.Context) {
 		var subtotal int64 = 0
 		invItems := make([]models.SalesInvoiceItem, 0, len(pr.Items))
 		for _, it := range pr.Items {
-			// ambil COST dari barang di gudang tsb (last buy price / WA / FIFO — di sini contoh last buy price)
-			var barang models.Barang
-			if err := tx.Where("id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
-				First(&barang).Error; err != nil {
+			// Ambil COST dari GudangBarang (harga beli terakhir per gudang)
+			var gb models.GudangBarang
+			if err := tx.
+				Where("barang_id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
+				First(&gb).Error; err != nil {
 				return err
 			}
 
-			// asumsi barang.HargaBeli disimpan float64 → konversi ke int64 sesuai kebijakan (pembulatan ke terdekat)
-			cost := int64(math.Round(barang.HargaBeli))
+			cost := int64(math.Round(gb.HargaBeli)) // asumsi float64 → int64
 
-			// guard untuk qty > 0
 			netPrice := it.SellPrice
 			netLine := netPrice * it.Qty
 			profitPer := netPrice - cost

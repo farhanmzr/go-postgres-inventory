@@ -95,10 +95,12 @@ func CreatePembelian(c *gin.Context) {
 	// --- opsional: pastikan semua barang_id ada & memang milik gudang tsb ---
 	for _, it := range in.Items {
 		var exist int64
-		if err := config.DB.Model(&models.Barang{}).
-			Where("id = ? AND gudang_id = ?", it.BarangID, in.WarehouseID).
+		if err := config.DB.Model(&models.GudangBarang{}).
+			Where("barang_id = ? AND gudang_id = ?", it.BarangID, in.WarehouseID).
 			Count(&exist).Error; err != nil || exist == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"message": fmt.Sprintf("Barang %d tidak ditemukan di gudang %d", it.BarangID, in.WarehouseID)})
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": fmt.Sprintf("Barang %d tidak ditemukan di gudang %d", it.BarangID, in.WarehouseID),
+			})
 			return
 		}
 	}
@@ -134,9 +136,9 @@ func CreatePembelian(c *gin.Context) {
 
 		// 4) Tambah stok & update harga_beli (hanya jika berubah)
 		for _, it := range in.Items {
-			// tambah stok atomik
-			res := tx.Model(&models.Barang{}).
-				Where("id = ? AND gudang_id = ?", it.BarangID, pembelianData.WarehouseID).
+			// tambah stok di GudangBarang
+			res := tx.Model(&models.GudangBarang{}).
+				Where("barang_id = ? AND gudang_id = ?", it.BarangID, pembelianData.WarehouseID).
 				UpdateColumn("stok", gorm.Expr("stok + ?", it.Qty))
 			if res.Error != nil {
 				return res.Error
@@ -144,9 +146,10 @@ func CreatePembelian(c *gin.Context) {
 			if res.RowsAffected == 0 {
 				return fmt.Errorf("barang %d tidak ditemukan di gudang %d", it.BarangID, pembelianData.WarehouseID)
 			}
-			// update harga beli terakhir jika berbeda
-			if err := tx.Model(&models.Barang{}).
-				Where("id = ? AND gudang_id = ? AND harga_beli <> ?", it.BarangID, pembelianData.WarehouseID, float64(it.BuyPrice)).
+
+			// update harga beli terakhir di GudangBarang
+			if err := tx.Model(&models.GudangBarang{}).
+				Where("barang_id = ? AND gudang_id = ? AND harga_beli <> ?", it.BarangID, pembelianData.WarehouseID, float64(it.BuyPrice)).
 				Update("harga_beli", float64(it.BuyPrice)).Error; err != nil {
 				return err
 			}

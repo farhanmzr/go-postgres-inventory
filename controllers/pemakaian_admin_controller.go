@@ -44,33 +44,40 @@ func UsageItemDecide(c *gin.Context) {
 	}
 
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
-		// lock item agar konsisten
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&item, in.ItemID).Error; err != nil {
+		// lock item
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			First(&item, in.ItemID).Error; err != nil {
 			return err
 		}
 
-		// APPROVE → kurangi stok sekali saja
+		// ambil header untuk dapat WarehouseID
+		var header models.UsageRequest
+		if err := tx.First(&header, item.UsageRequestID).Error; err != nil {
+			return err
+		}
+
 		if target == models.ItemApproved && !item.StockApplied {
-			// lock row barang
-			var stok int
+			// lock row stok di gudang_barangs
+			var gb models.GudangBarang
 			if err := tx.
-				Table("barangs").
 				Clauses(clause.Locking{Strength: "UPDATE"}).
-				Select("stok").
-				Where("id = ?", item.BarangID).
-				Scan(&stok).Error; err != nil {
+				Where("gudang_id = ? AND barang_id = ?", header.WarehouseID, item.BarangID).
+				First(&gb).Error; err != nil {
 				return err
 			}
 
-			if stok < int(item.Qty) {
+			if gb.Stok < int(item.Qty) {
 				return errors.New("stok tidak mencukupi")
 			}
 
-			// update stok
-			if err := tx.Exec("UPDATE barangs SET stok = stok - ? WHERE id = ?", item.Qty, item.BarangID).Error; err != nil {
+			// update stok di GudangBarang
+			if err := tx.Model(&models.GudangBarang{}).
+				Where("id = ?", gb.ID).
+				UpdateColumn("stok", gorm.Expr("stok - ?", item.Qty)).Error; err != nil {
 				return err
 			}
-			// tandai status & stock_applied=true
+
+			// update status item
 			if err := tx.Model(&models.UsageItem{}).
 				Where("id = ?", item.ID).
 				Updates(map[string]any{
@@ -81,7 +88,7 @@ func UsageItemDecide(c *gin.Context) {
 				return err
 			}
 		} else {
-			// REJECT atau APPROVE ulang (idempotent)
+			// REJECT / re-approve
 			if err := tx.Model(&models.UsageItem{}).
 				Where("id = ?", item.ID).
 				Updates(map[string]any{

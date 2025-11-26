@@ -14,24 +14,24 @@ import (
 // ================= DTO =================
 
 type barangReportRow struct {
-	ID           uint    `json:"id"`
-	Nama         string  `json:"nama"`
-	Kode         string  `json:"kode"`
-	Satuan       string  `json:"satuan"`
-	Merek        string  `json:"merek"`
-	MadeIn       string  `json:"made_in"`
-	GrupID       uint    `json:"grup_id"`
-	GrupNama     string  `json:"grup_nama"`
-	GudangID     uint    `json:"gudang_id"`
-	GudangNama   string  `json:"gudang_nama"`
-	LokasiSusun  string  `json:"lokasi_susun"`
-	HargaBeli    float64 `json:"harga_beli"`
-	HargaJual    float64 `json:"harga_jual"`
-	Stok         int     `json:"stok"`
-	StokMinimal  int     `json:"stok_minimal"`
-	NilaiBeli    float64 `json:"nilai_beli"`
-	NilaiJual    float64 `json:"nilai_jual"`
-	StatusStok   string  `json:"status_stok"`
+	ID          uint    `json:"id"`
+	Nama        string  `json:"nama"`
+	Kode        string  `json:"kode"`
+	Satuan      string  `json:"satuan"`
+	Merek       string  `json:"merek"`
+	MadeIn      string  `json:"made_in"`
+	GrupID      uint    `json:"grup_id"`
+	GrupNama    string  `json:"grup_nama"`
+	GudangID    uint    `json:"gudang_id"`
+	GudangNama  string  `json:"gudang_nama"`
+	LokasiSusun string  `json:"lokasi_susun"`
+	HargaBeli   float64 `json:"harga_beli"`
+	HargaJual   float64 `json:"harga_jual"`
+	Stok        int     `json:"stok"`
+	StokMinimal int     `json:"stok_minimal"`
+	NilaiBeli   float64 `json:"nilai_beli"`
+	NilaiJual   float64 `json:"nilai_jual"`
+	StatusStok  string  `json:"status_stok"`
 }
 
 type stockBarangRow struct {
@@ -111,42 +111,46 @@ func ReportBarang(c *gin.Context) {
 	}
 
 	q := db.
-		Table("barangs").
+		Table("gudang_barangs gbg").
 		Select(`
-			barangs.id,
-			barangs.nama,
-			barangs.kode,
-			barangs.satuan,
-			barangs.merek,
-			barangs.made_in,
-			barangs.grup_barang_id AS grup_id,
-			gb.nama AS grup_nama,
-			barangs.gudang_id AS gudang_id,
-			gd.nama AS gudang_nama,
-			barangs.lokasi_susun,
-			barangs.harga_beli,
-			barangs.harga_jual,
-			barangs.stok,
-			barangs.stok_minimal,
-			(barangs.harga_beli * barangs.stok) AS nilai_beli,
-			(barangs.harga_jual * barangs.stok) AS nilai_jual,
-			CASE WHEN barangs.stok < barangs.stok_minimal THEN 'LOW' ELSE 'OK' END AS status_stok
+			b.id                          AS id,
+			b.nama                        AS nama,
+			b.kode                        AS kode,
+			b.satuan                      AS satuan,
+			b.merek                       AS merek,
+			b.made_in                     AS made_in,
+			b.grup_barang_id              AS grup_id,
+			gb.nama                       AS grup_nama,
+			gbg.gudang_id                 AS gudang_id,
+			gd.nama                       AS gudang_nama,
+			gbg.lokasi_susun              AS lokasi_susun,
+			gbg.harga_beli                AS harga_beli,
+			gbg.harga_jual                AS harga_jual,
+			gbg.stok                      AS stok,
+			b.stok_minimal                AS stok_minimal,
+			(gbg.harga_beli * gbg.stok)   AS nilai_beli,
+			(gbg.harga_jual * gbg.stok)   AS nilai_jual,
+			CASE 
+				WHEN gbg.stok < b.stok_minimal THEN 'LOW' 
+				ELSE 'OK' 
+			END                           AS status_stok
 		`).
-		Joins("INNER JOIN grup_barangs gb ON gb.id = barangs.grup_barang_id").
-		Joins("INNER JOIN gudangs gd ON gd.id = barangs.gudang_id")
+		Joins("INNER JOIN barangs b ON b.id = gbg.barang_id").
+		Joins("INNER JOIN grup_barangs gb ON gb.id = b.grup_barang_id").
+		Joins("INNER JOIN gudangs gd ON gd.id = gbg.gudang_id")
 
 	if qstr := strings.TrimSpace(c.Query("q")); qstr != "" {
 		like := "%" + qstr + "%"
-		q = q.Where(`barangs.nama ILIKE ? OR barangs.kode ILIKE ? OR barangs.merek ILIKE ?`, like, like, like)
+		q = q.Where(`b.nama ILIKE ? OR b.kode ILIKE ? OR b.merek ILIKE ?`, like, like, like)
 	}
 	if merek := strings.TrimSpace(c.Query("merek")); merek != "" {
-		q = q.Where("barangs.merek ILIKE ?", "%"+merek+"%")
+		q = q.Where("b.merek ILIKE ?", "%"+merek+"%")
 	}
 	if minStokPtr != nil {
-		q = q.Where("barangs.stok >= ?", *minStokPtr)
+		q = q.Where("gbg.stok >= ?", *minStokPtr)
 	}
 	if maxStokPtr != nil {
-		q = q.Where("barangs.stok <= ?", *maxStokPtr)
+		q = q.Where("gbg.stok <= ?", *maxStokPtr)
 	}
 
 	// total (pakai subquery biar aman dari LIMIT/OFFSET)
@@ -157,10 +161,10 @@ func ReportBarang(c *gin.Context) {
 	}
 
 	q = qSort(q, sortBy, map[string]string{
-		"nama":    "barangs.nama",
-		"kode":    "barangs.kode",
-		"stok":    "barangs.stok",
-		"default": "barangs.id",
+		"nama":    "b.nama",
+		"kode":    "b.kode",
+		"stok":    "gbg.stok",
+		"default": "b.id",
 	})
 
 	offset := (page - 1) * size
@@ -194,18 +198,19 @@ func ReportStockPerGrup(c *gin.Context) {
 	size := getInt(c, "page_size", 200)
 	sortBy := c.DefaultQuery("sort", "")
 
-	// Summary
+	// Summary: total stok semua barang di grup ini (semua gudang)
 	var sum stockGrupSummary
 	if err := db.
-		Table("barangs").
+		Table("gudang_barangs gbg").
 		Select(`
 			gb.id   AS grup_id,
 			gb.nama AS grup_nama,
-			SUM(barangs.stok) AS total_stok,
-			COUNT(barangs.id) AS jumlah_item
+			COALESCE(SUM(gbg.stok),0) AS total_stok,
+			COUNT(DISTINCT b.id) AS jumlah_item
 		`).
-		Joins("INNER JOIN grup_barangs gb ON gb.id = barangs.grup_barang_id").
-		Where("barangs.grup_barang_id = ?", grupID).
+		Joins("INNER JOIN barangs b ON b.id = gbg.barang_id").
+		Joins("INNER JOIN grup_barangs gb ON gb.id = b.grup_barang_id").
+		Where("b.grup_barang_id = ?", grupID).
 		Group("gb.id, gb.nama").
 		Scan(&sum).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -216,23 +221,25 @@ func ReportStockPerGrup(c *gin.Context) {
 		return
 	}
 
-	// Items
+	// Items: stok per barang (akumulasi semua gudang)
 	itemsQ := db.
-		Table("barangs").
+		Table("gudang_barangs gbg").
 		Select(`
-			barangs.id   AS barang_id,
-			barangs.nama AS nama,
-			barangs.kode AS kode,
-			barangs.satuan AS satuan,
-			barangs.stok AS stok
+			b.id        AS barang_id,
+			b.nama      AS nama,
+			b.kode      AS kode,
+			b.satuan    AS satuan,
+			COALESCE(SUM(gbg.stok),0) AS stok
 		`).
-		Where("barangs.grup_barang_id = ?", grupID)
+		Joins("INNER JOIN barangs b ON b.id = gbg.barang_id").
+		Where("b.grup_barang_id = ?", grupID).
+		Group("b.id, b.nama, b.kode, b.satuan")
 
 	itemsQ = qSort(itemsQ, sortBy, map[string]string{
-		"nama":    "barangs.nama",
-		"kode":    "barangs.kode",
-		"stok":    "barangs.stok",
-		"default": "barangs.id",
+		"nama":    "nama", // alias di SELECT
+		"kode":    "kode",
+		"stok":    "stok",
+		"default": "barang_id",
 	})
 
 	offset := (page - 1) * size
@@ -262,18 +269,18 @@ func ReportStockPerGudang(c *gin.Context) {
 	size := getInt(c, "page_size", 200)
 	sortBy := c.DefaultQuery("sort", "")
 
-	// Summary
+	// Summary: total stok & jumlah item di gudang ini
 	var sum stockGudangSummary
 	if err := db.
-		Table("barangs").
+		Table("gudang_barangs gbg").
 		Select(`
 			gd.id   AS gudang_id,
 			gd.nama AS gudang_nama,
-			SUM(barangs.stok) AS total_stok,
-			COUNT(barangs.id) AS jumlah_item
+			COALESCE(SUM(gbg.stok),0) AS total_stok,
+			COUNT(DISTINCT gbg.barang_id) AS jumlah_item
 		`).
-		Joins("INNER JOIN gudangs gd ON gd.id = barangs.gudang_id").
-		Where("barangs.gudang_id = ?", gudangID).
+		Joins("INNER JOIN gudangs gd ON gd.id = gbg.gudang_id").
+		Where("gbg.gudang_id = ?", gudangID).
 		Group("gd.id, gd.nama").
 		Scan(&sum).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -284,23 +291,24 @@ func ReportStockPerGudang(c *gin.Context) {
 		return
 	}
 
-	// Items
+	// Items: stok per barang di gudang ini
 	itemsQ := db.
-		Table("barangs").
+		Table("gudang_barangs gbg").
 		Select(`
-			barangs.id   AS barang_id,
-			barangs.nama AS nama,
-			barangs.kode AS kode,
-			barangs.satuan AS satuan,
-			barangs.stok AS stok
+			b.id        AS barang_id,
+			b.nama      AS nama,
+			b.kode      AS kode,
+			b.satuan    AS satuan,
+			gbg.stok    AS stok
 		`).
-		Where("barangs.gudang_id = ?", gudangID)
+		Joins("INNER JOIN barangs b ON b.id = gbg.barang_id").
+		Where("gbg.gudang_id = ?", gudangID)
 
 	itemsQ = qSort(itemsQ, sortBy, map[string]string{
-		"nama":    "barangs.nama",
-		"kode":    "barangs.kode",
-		"stok":    "barangs.stok",
-		"default": "barangs.id",
+		"nama":    "b.nama",
+		"kode":    "b.kode",
+		"stok":    "gbg.stok",
+		"default": "b.id",
 	})
 
 	offset := (page - 1) * size

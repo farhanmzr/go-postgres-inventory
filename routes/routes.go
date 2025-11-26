@@ -57,10 +57,15 @@ func SetupRoutes(r *gin.Engine) {
 				barang.GET("/:id", controllers.GetBarangByID)
 				barang.POST("/", controllers.CreateBarang)
 				barang.PUT("/:id", controllers.UpdateBarang)
-				barang.PUT("/:id/stok", controllers.UpdateStokBarang)
 				barang.DELETE("/:id", controllers.DeleteBarang)
-				barang.GET("/:id/historyStok", controllers.GetStockHistoryByBarang)
+			}
 
+			gudangBarang := adminAuth.Group("/gudang-barang")
+			{
+				gudangBarang.GET("/:id", controllers.GetGudangBarangByID)
+				gudangBarang.PUT("/:id/stok", controllers.UpdateStokBarang)
+				gudangBarang.GET("/:id/historyStok", controllers.GetStockHistoryByBarang)
+				// gudangBarang.DELETE("/:id", controllers.DeleteGudangBarang)
 			}
 
 			gudang := adminAuth.Group("/gudang")
@@ -70,6 +75,9 @@ func SetupRoutes(r *gin.Engine) {
 				gudang.POST("/", controllers.CreateGudang)
 				gudang.PUT("/:id", controllers.UpdateGudang)
 				gudang.DELETE("/:id", controllers.DeleteGudang)
+				//barang
+				gudang.GET("/:id/barang", controllers.GetGudangBarangList)
+				gudang.POST("/:id/barang", controllers.TambahBarangKeGudang)
 			}
 
 			grupBarang := adminAuth.Group("/grupbarang")

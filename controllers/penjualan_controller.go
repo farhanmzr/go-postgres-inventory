@@ -94,10 +94,12 @@ func CreatePenjualan(c *gin.Context) {
 	// --- opsional: pastikan semua barang_id ada & memang milik gudang tsb ---
 	for _, it := range in.Items {
 		var exist int64
-		if err := config.DB.Model(&models.Barang{}).
-			Where("id = ? AND gudang_id = ?", it.BarangID, in.WarehouseID).
+		if err := config.DB.Model(&models.GudangBarang{}).
+			Where("barang_id = ? AND gudang_id = ?", it.BarangID, in.WarehouseID).
 			Count(&exist).Error; err != nil || exist == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"message": fmt.Sprintf("Barang %d tidak ditemukan di gudang %d", it.BarangID, in.WarehouseID)})
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": fmt.Sprintf("Barang %d tidak ditemukan di gudang %d", it.BarangID, in.WarehouseID),
+			})
 			return
 		}
 	}

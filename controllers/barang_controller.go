@@ -14,18 +14,13 @@ import (
 
 func CreateBarang(c *gin.Context) {
 	var input struct {
-		Nama         string  `json:"nama"`
-		Kode         string  `json:"kode"`
-		GudangID     uint    `json:"gudang_id"`
-		LokasiSusun  string  `json:"lokasi_susun"`
-		Satuan       string  `json:"satuan"`
-		Merek        string  `json:"merek"`
-		MadeIn       string  `json:"made_in"`
-		GrupBarangID uint    `json:"grup_barang_id"`
-		HargaBeli    float64 `json:"harga_beli"`
-		HargaJual    float64 `json:"harga_jual"`
-		Stok         int     `json:"stok"`
-		StokMinimal  int     `json:"stok_minimal"`
+		Nama         string `json:"nama"`
+		Kode         string `json:"kode"`
+		Satuan       string `json:"satuan"`
+		Merek        string `json:"merek"`
+		MadeIn       string `json:"made_in"`
+		GrupBarangID uint   `json:"grup_barang_id"`
+		StokMinimal  int    `json:"stok_minimal"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -33,7 +28,7 @@ func CreateBarang(c *gin.Context) {
 		return
 	}
 
-	// Cek apakah kode barang sudah ada
+	// Cek apakah kode barang sudah ada di master
 	var exist models.Barang
 	if err := config.DB.Where("kode = ?", input.Kode).First(&exist).Error; err == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Kode barang sudah digunakan"})
@@ -43,36 +38,32 @@ func CreateBarang(c *gin.Context) {
 	barang := models.Barang{
 		Nama:         input.Nama,
 		Kode:         input.Kode,
-		GudangID:     input.GudangID,
-		LokasiSusun:  input.LokasiSusun,
 		Satuan:       input.Satuan,
 		Merek:        input.Merek,
 		MadeIn:       input.MadeIn,
 		GrupBarangID: input.GrupBarangID,
-		HargaBeli:    input.HargaBeli,
-		HargaJual:    input.HargaJual,
-		Stok:         input.Stok,
 		StokMinimal:  input.StokMinimal,
 	}
 
-	// Simpan ke DB
 	if err := config.DB.Create(&barang).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Ambil lagi dari DB dengan Preload
-	if err := config.DB.Preload("Gudang").Preload("GrupBarang").First(&barang, barang.ID).Error; err != nil {
+	if err := config.DB.Preload("GrupBarang").First(&barang, barang.ID).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Barang berhasil ditambahkan", "data": barang})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Barang master berhasil ditambahkan",
+		"data":    barang,
+	})
 }
 
 func GetAllBarang(c *gin.Context) {
 	var barangs []models.Barang
-	if err := config.DB.Preload("Gudang").Preload("GrupBarang").Find(&barangs).Error; err != nil {
+	if err := config.DB.Preload("GrupBarang").Find(&barangs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -89,7 +80,7 @@ func GetBarangByID(c *gin.Context) {
 	}
 
 	var barang models.Barang
-	if err := config.DB.Preload("Gudang").Preload("GrupBarang").First(&barang, id).Error; err != nil {
+	if err := config.DB.Preload("GrupBarang").First(&barang, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Barang tidak ditemukan"})
 		return
 	}
@@ -114,8 +105,6 @@ func UpdateBarang(c *gin.Context) {
 	var input struct {
 		Nama         string  `json:"nama"`
 		Kode         string  `json:"kode"`
-		GudangID     uint    `json:"gudang_id"`
-		LokasiSusun  string  `json:"lokasi_susun"`
 		Satuan       string  `json:"satuan"`
 		Merek        string  `json:"merek"`
 		MadeIn       string  `json:"made_in"`
@@ -142,8 +131,6 @@ func UpdateBarang(c *gin.Context) {
 	updateData := map[string]any{
 		"nama":           input.Nama,
 		"kode":           input.Kode,
-		"gudang_id":      input.GudangID,
-		"lokasi_susun":   input.LokasiSusun,
 		"satuan":         input.Satuan,
 		"merek":          input.Merek,
 		"made_in":        input.MadeIn,
@@ -157,138 +144,9 @@ func UpdateBarang(c *gin.Context) {
 		return
 	}
 
-	config.DB.Preload("Gudang").Preload("GrupBarang").First(&barang, barang.ID)
+	config.DB.Preload("GrupBarang").First(&barang, barang.ID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Barang berhasil diupdate", "data": barang})
-}
-
-func UpdateStokBarang(c *gin.Context) {
-	idParam := c.Param("id")
-	id, err := strconv.Atoi(idParam)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak valid"})
-		return
-	}
-
-	var barang models.Barang
-	if err := config.DB.First(&barang, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Barang tidak ditemukan"})
-		return
-	}
-
-	var input struct {
-		Stok   int    `json:"stok" binding:"required"`
-		Alasan string `json:"alasan" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Data tidak valid"})
-		return
-	}
-
-	uid, err := currentAdminID(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"message": "Unauthorized",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	oldStok := barang.Stok
-	newStok := input.Stok
-
-	err = config.DB.Transaction(func(tx *gorm.DB) error {
-
-		if err := tx.Model(&barang).Update("stok", newStok).Error; err != nil {
-			return err
-		}
-
-		history := models.StockHistory{
-			BarangID:    barang.ID,
-			OldStok:     oldStok,
-			NewStok:     newStok,
-			Selisih:     newStok - oldStok,
-			Alasan:      input.Alasan,
-			CreatedByID: uid, // << simpan siapa yang update
-		}
-
-		if err := tx.Create(&history).Error; err != nil {
-			return err
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// reload barang + relasi biar data lengkap
-	config.DB.
-		Preload("Gudang").
-		Preload("GrupBarang").
-		First(&barang, barang.ID)
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Stok barang berhasil diupdate",
-		"data":    barang,
-	})
-}
-
-func GetStockHistoryByBarang(c *gin.Context) {
-	idParam := c.Param("id")
-	id, err := strconv.Atoi(idParam)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak valid"})
-		return
-	}
-
-	// Optional: pagination via ?page=1&limit=20
-	pageStr := c.DefaultQuery("page", "1")
-	limitStr := c.DefaultQuery("limit", "20")
-
-	page, _ := strconv.Atoi(pageStr)
-	limit, _ := strconv.Atoi(limitStr)
-
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 || limit > 100 {
-		limit = 20
-	}
-
-	var histories []models.StockHistory
-	var total int64
-
-	baseQuery := config.DB.Model(&models.StockHistory{}).
-		Where("barang_id = ?", id)
-
-	// Hitung total data
-	if err := baseQuery.Count(&total).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Ambil data history
-	if err := baseQuery.
-		Preload("Barang").
-		Order("created_at DESC").
-		Offset((page - 1) * limit).
-		Limit(limit).
-		Find(&histories).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "History stok barang",
-		"data":    histories,
-		"page":    page,
-		"limit":   limit,
-		"total":   total,
-	})
 }
 
 func DeleteBarang(c *gin.Context) {
@@ -357,7 +215,6 @@ func DeleteBarang(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Barang berhasil dihapus"})
 }
-
 
 // response ringkas untuk list barang di gudang
 type BarangSimple struct {
