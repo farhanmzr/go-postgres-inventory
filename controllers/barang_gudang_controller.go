@@ -96,13 +96,16 @@ func TambahBarangKeGudang(c *gin.Context) {
 func GetGudangBarangList(c *gin.Context) {
 	db := config.DB
 
-	// ambil gudang_id dari path
 	gudangIDStr := c.Param("gudang_id")
+	if gudangIDStr == "" {
+		gudangIDStr = c.Param("id") // fallback kalau route pakai :id
+	}
 	gudangID64, err := strconv.ParseUint(gudangIDStr, 10, 64)
 	if err != nil || gudangID64 == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "gudang_id tidak valid"})
 		return
 	}
+
 	gudangID := uint(gudangID64)
 
 	// opsional: cek gudang ada
@@ -159,12 +162,16 @@ func GetGudangBarangList(c *gin.Context) {
 }
 
 func GetGudangBarangByID(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil || id == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id tidak valid"})
+	gudangIDStr := c.Param("gudang_id")
+	if gudangIDStr == "" {
+		gudangIDStr = c.Param("id") // fallback kalau route pakai :id
+	}
+	gudangID64, err := strconv.ParseUint(gudangIDStr, 10, 64)
+	if err != nil || gudangID64 == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gudang_id tidak valid"})
 		return
 	}
+	id := uint(gudangID64)
 
 	var gb models.GudangBarang
 	if err := config.DB.
@@ -190,12 +197,16 @@ type GudangBarangUpdateInput struct {
 }
 
 func UpdateGudangBarang(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil || id == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id tidak valid"})
+	gudangIDStr := c.Param("gudang_id")
+	if gudangIDStr == "" {
+		gudangIDStr = c.Param("id") // fallback kalau route pakai :id
+	}
+	gudangID64, err := strconv.ParseUint(gudangIDStr, 10, 64)
+	if err != nil || gudangID64 == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gudang_id tidak valid"})
 		return
 	}
+	id := uint(gudangID64)
 
 	var in GudangBarangUpdateInput
 	if err := c.ShouldBindJSON(&in); err != nil {
@@ -242,13 +253,16 @@ func UpdateGudangBarang(c *gin.Context) {
 }
 
 func UpdateStokBarang(c *gin.Context) {
-	idParam := c.Param("id")
-	id64, err := strconv.ParseUint(idParam, 10, 64)
-	if err != nil || id64 == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak valid"})
+	gudangIDStr := c.Param("gudang_id")
+	if gudangIDStr == "" {
+		gudangIDStr = c.Param("id") // fallback kalau route pakai :id
+	}
+	gudangID64, err := strconv.ParseUint(gudangIDStr, 10, 64)
+	if err != nil || gudangID64 == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gudang_id tidak valid"})
 		return
 	}
-	id := uint(id64)
+	id := uint(gudangID64)
 
 	// ambil data gudang_barang
 	var gb models.GudangBarang
@@ -327,13 +341,16 @@ func UpdateStokBarang(c *gin.Context) {
 }
 
 func GetStockHistoryByBarang(c *gin.Context) {
-	idParam := c.Param("id")
-	id64, err := strconv.ParseUint(idParam, 10, 64)
-	if err != nil || id64 == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak valid"})
+	gudangIDStr := c.Param("gudang_id")
+	if gudangIDStr == "" {
+		gudangIDStr = c.Param("id") // fallback kalau route pakai :id
+	}
+	gudangID64, err := strconv.ParseUint(gudangIDStr, 10, 64)
+	if err != nil || gudangID64 == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gudang_id tidak valid"})
 		return
 	}
-	gudangBarangID := uint(id64)
+	gudangBarangID := uint(gudangID64)
 
 	// Optional: pagination via ?page=1&limit=20
 	pageStr := c.DefaultQuery("page", "1")
