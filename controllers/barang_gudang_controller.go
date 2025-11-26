@@ -19,11 +19,15 @@ type GudangBarangCreateInput struct {
 func TambahBarangKeGudang(c *gin.Context) {
 	// ambil gudang_id dari path
 	gudangIDStr := c.Param("gudang_id")
+	if gudangIDStr == "" {
+		gudangIDStr = c.Param("id") // fallback kalau route pakai :id
+	}
 	gudangID64, err := strconv.ParseUint(gudangIDStr, 10, 64)
 	if err != nil || gudangID64 == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "gudang_id tidak valid"})
 		return
 	}
+
 	gudangID := uint(gudangID64)
 
 	// body: barang_id
