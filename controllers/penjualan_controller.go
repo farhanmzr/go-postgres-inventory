@@ -41,18 +41,6 @@ func CreatePenjualan(c *gin.Context) {
 		return
 	}
 
-	// validasi tanggal tidak ke depan (gunakan UTC agar konsisten)
-	loc, _ := time.LoadLocation("Asia/Jakarta")
-	// hari ini (tanpa jam)
-	today := time.Now().In(loc).Truncate(24 * time.Hour)
-	// tanggal request (tanpa jam)
-	reqDate := in.SalesDate.In(loc).Truncate(24 * time.Hour)
-	// kalau tanggal request > hari ini -> ke depan
-	if reqDate.After(today) {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal pembelian tidak boleh ke depan"})
-		return
-	}
-
 	// validasi payment
 	if in.Payment != "CASH" && in.Payment != "CREDIT" {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Metode pembayaran tidak valid"})

@@ -36,17 +36,17 @@ func UsageCreate(c *gin.Context) {
 		return
 	}
 
-	// validasi tanggal tidak ke depan (gunakan UTC agar konsisten)
-	loc, _ := time.LoadLocation("Asia/Jakarta")
-	// hari ini (tanpa jam)
-	today := time.Now().In(loc).Truncate(24 * time.Hour)
-	// tanggal request (tanpa jam)
-	reqDate := in.UsageDate.In(loc).Truncate(24 * time.Hour)
-	// kalau tanggal request > hari ini -> ke depan
-	if reqDate.After(today) {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal pembelian tidak boleh ke depan"})
-		return
-	}
+	// // validasi tanggal tidak ke depan (gunakan UTC agar konsisten)
+	// loc, _ := time.LoadLocation("Asia/Jakarta")
+	// // hari ini (tanpa jam)
+	// today := time.Now().In(loc).Truncate(24 * time.Hour)
+	// // tanggal request (tanpa jam)
+	// reqDate := in.UsageDate.In(loc).Truncate(24 * time.Hour)
+	// // kalau tanggal request > hari ini -> ke depan
+	// if reqDate.After(today) {
+	// 	c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal pembelian tidak boleh ke depan"})
+	// 	return
+	// }
 
 	// ambil user_id dari context (normalize)
 	rawID, ok := c.Get("user_id")
