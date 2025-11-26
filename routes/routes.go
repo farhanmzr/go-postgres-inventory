@@ -184,6 +184,16 @@ func SetupRoutes(r *gin.Engine) {
 					// barang.PUT("/:id", controllers.UpdateBarang)
 					// barang.DELETE("/:id", controllers.DeleteBarang)
 				}
+
+				gudangBarang := userAuth.Group("/gudang-barang")
+				{
+					gudangBarang.GET("/:id", controllers.GetGudangBarangByID)
+					gudangBarang.PUT("/:id/stok", middlewares.RequirePerm("EDIT_STOCK"), controllers.UpdateStokBarang)
+					gudangBarang.GET("/:id/historyStok", middlewares.RequirePerm("EDIT_STOCK"), controllers.GetStockHistoryByBarang)
+					gudangBarang.PUT("/:id", controllers.UpdateGudangBarang)
+					// gudangBarang.DELETE("/:id", controllers.DeleteGudangBarang)
+				}
+
 				gudang := userAuth.Group("/gudang")
 				{
 					gudang.GET("/", controllers.GetAllGudang)
@@ -191,6 +201,9 @@ func SetupRoutes(r *gin.Engine) {
 					gudang.POST("/", middlewares.RequirePerm("CREATE_GUDANG"), controllers.CreateGudang)
 					// gudang.PUT("/:id", controllers.UpdateGudang)
 					// gudang.DELETE("/:id", controllers.DeleteGudang)
+					//barang
+					gudang.GET("/:id/barang", controllers.GetGudangBarangList)
+					gudang.POST("/:id/barang", middlewares.RequirePerm("CREATE_ITEM"), controllers.TambahBarangKeGudang)
 				}
 
 				grupBarang := userAuth.Group("/grupbarang")
