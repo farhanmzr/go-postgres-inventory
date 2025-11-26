@@ -109,7 +109,6 @@ func UpdateBarang(c *gin.Context) {
 		Merek        string  `json:"merek"`
 		MadeIn       string  `json:"made_in"`
 		GrupBarangID uint    `json:"grup_barang_id"`
-		HargaJual    float64 `json:"harga_jual"`
 		StokMinimal  int     `json:"stok_minimal"`
 	}
 
@@ -135,7 +134,6 @@ func UpdateBarang(c *gin.Context) {
 		"merek":          input.Merek,
 		"made_in":        input.MadeIn,
 		"grup_barang_id": input.GrupBarangID,
-		"harga_jual":     input.HargaJual,
 		"stok_minimal":   input.StokMinimal,
 	}
 
