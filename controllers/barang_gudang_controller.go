@@ -82,6 +82,7 @@ func TambahBarangKeGudang(c *gin.Context) {
 	if err := config.DB.
 		Preload("Gudang").
 		Preload("Barang").
+		Preload("Barang.GrupBarang").
 		First(&gb, gb.ID).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -126,7 +127,8 @@ func GetGudangBarangList(c *gin.Context) {
 	q := db.Model(&models.GudangBarang{}).
 		Where("gudang_id = ?", gudangID).
 		Preload("Gudang").
-		Preload("Barang")
+		Preload("Barang").
+		Preload("Barang.GrupBarang")
 
 	if qstr != "" {
 		like := "%" + qstr + "%"
