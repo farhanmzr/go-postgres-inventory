@@ -34,7 +34,7 @@ func SetupRoutes(r *gin.Engine) {
 
 			// Permintaan
 			adminAuth.GET("/permintaan", controllers.AdminGetAllPermintaan)
-			adminAuth.DELETE("/permintaan/id", controllers.DeletePermintaan)
+			adminAuth.DELETE("/permintaan/:id", controllers.DeletePermintaan)
 
 			adminPemakaian := adminAuth.Group("/pemakaian")
 			{
