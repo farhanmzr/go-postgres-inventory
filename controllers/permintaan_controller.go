@@ -10,20 +10,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-
 func CreatePermintaan(c *gin.Context) {
 
-    var input struct {
-        Keterangan string `json:"keterangan"`
-        NamaPeminta string `json:"nama_peminta"`
-        KodePeminta string `json:"kode_peminta"`
-        TanggalPermintaan time.Time `json:"tanggal_permintaan"`
-    }
+	var input struct {
+		Keterangan        string    `json:"keterangan"`
+		NamaPeminta       string    `json:"nama_peminta"`
+		KodePeminta       string    `json:"kode_peminta"`
+		TanggalPermintaan time.Time `json:"tanggal_permintaan"`
+	}
 
-    if err := c.ShouldBindJSON(&input); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Data tidak valid"})
-        return
-    }
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Data tidak valid"})
+		return
+	}
 
 	uid, err := currentUserID(c)
 	if err != nil {
@@ -31,20 +30,20 @@ func CreatePermintaan(c *gin.Context) {
 		return
 	}
 
-    permintaan := models.Permintaan{
-        Keterangan: input.Keterangan,
-        NamaPeminta: input.NamaPeminta,
-        KodePeminta: input.KodePeminta,
-        TanggalPermintaan: input.TanggalPermintaan,
-		CreatedByID: uid,
-    }
+	permintaan := models.Permintaan{
+		Keterangan:        input.Keterangan,
+		NamaPeminta:       input.NamaPeminta,
+		KodePeminta:       input.KodePeminta,
+		TanggalPermintaan: input.TanggalPermintaan,
+		CreatedByID:       uid,
+	}
 
-    if err := config.DB.Create(&permintaan).Error; err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
+	if err := config.DB.Create(&permintaan).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
-    c.JSON(http.StatusOK, gin.H{"message": "Berhasil membuat Permintaan", "data": permintaan})
+	c.JSON(http.StatusOK, gin.H{"message": "Berhasil membuat Permintaan", "data": permintaan})
 }
 
 func GetMyPermintaan(c *gin.Context) {
@@ -55,19 +54,19 @@ func GetMyPermintaan(c *gin.Context) {
 		return
 	}
 
-    var grups []models.Permintaan
-    if err := config.DB.
+	var grups []models.Permintaan
+	if err := config.DB.
 		Where("created_by_id = ?", uid).
 		Order("id DESC").
 		Find(&grups).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengambil data", "error": err.Error()})
 		return
 	}
-    c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil data Permintaan", "data": grups})
+	c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil data Permintaan", "data": grups})
 }
 
 func AdminGetAllPermintaan(c *gin.Context) {
-	
+
 	var grups []models.Permintaan
 	if err := config.DB.
 		Order("id DESC").
@@ -77,4 +76,38 @@ func AdminGetAllPermintaan(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": grups})
+}
+
+func DeletePermintaan(c *gin.Context) {
+
+	// ID permintaan dari URL param
+	id := c.Param("id")
+
+	uid, err := currentUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "error": err.Error()})
+		return
+	}
+
+	var data models.Permintaan
+
+	// ambil data permintaan
+	if err := config.DB.First(&data, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "Permintaan tidak ditemukan"})
+		return
+	}
+
+	// cek apakah ini milik user (hanya creator yang boleh hapus)
+	if data.CreatedByID != uid {
+		c.JSON(http.StatusForbidden, gin.H{"message": "Kamu tidak punya izin menghapus permintaan ini"})
+		return
+	}
+
+	// delete
+	if err := config.DB.Delete(&data).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal menghapus permintaan", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Permintaan berhasil dihapus"})
 }

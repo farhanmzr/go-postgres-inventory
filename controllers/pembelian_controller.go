@@ -302,3 +302,98 @@ func PurchaseInvoiceDetail(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil data Invoice", "data": inv})
 }
+
+func DeletePembelian(c *gin.Context) {
+	// ambil id purchase_request dari path param
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "id tidak valid"})
+		return
+	}
+
+	var pr models.PurchaseRequest
+
+	// load header + items
+	if err := config.DB.
+		Preload("Items").
+		First(&pr, uint(id)).Error; err != nil {
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Pembelian tidak ditemukan"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengambil data pembelian", "error": err.Error()})
+		return
+	}
+
+	// (opsional) cek otorisasi: hanya pembuat / admin yang boleh hapus
+	// rawID, _ := c.Get("user_id")
+	// ...
+
+	err = config.DB.Transaction(func(tx *gorm.DB) error {
+
+		// 1) Revert stok gudang (kurangi lagi sesuai qty pembelian)
+		for _, it := range pr.Items {
+			var gb models.GudangBarang
+			if err := tx.
+				Where("barang_id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
+				First(&gb).Error; err != nil {
+
+				return fmt.Errorf("data stok gudang untuk barang %d tidak ditemukan: %w", it.BarangID, err)
+			}
+
+			if err := tx.Model(&models.GudangBarang{}).
+				Where("barang_id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
+				UpdateColumn("stok", gorm.Expr("stok - ?", it.Qty)).Error; err != nil {
+				return err
+			}
+		}
+
+		// 2) Kalau payment CREDIT, hapus piutang yang berasal dari pembelian ini
+		if pr.Payment == models.PaymentCredit {
+			// waktu create: Source = PURCHASE, SourceID = inv.PurchaseRequestID (== pr.ID)
+			if err := tx.
+				Where("source = ? AND source_id = ?", models.CreditFromPurchase, pr.ID).
+				Delete(&models.Piutang{}).Error; err != nil {
+				return err
+			}
+			// PiutangItem ikut kehapus karena sudah OnDelete:CASCADE
+		}
+
+		// 3) Hapus invoice (dan otomatis detailnya via OnDelete:CASCADE)
+		// PK invoice = PurchaseRequestID, jadi cukup where di situ
+		if err := tx.
+			Where("purchase_request_id = ?", pr.ID).
+			Delete(&models.PurchaseInvoice{}).Error; err != nil {
+			return err
+		}
+
+		// 4) Hapus detail purchase request
+		if err := tx.
+			Where("purchase_request_id = ?", pr.ID).
+			Delete(&models.PurchaseReqItem{}).Error; err != nil {
+			return err
+		}
+
+		// 5) Terakhir, hapus header purchase request
+		if err := tx.Delete(&pr).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		fmt.Printf("DeletePembelian error: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Gagal menghapus Pembelian",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Berhasil menghapus Pembelian (termasuk invoice, piutang jika ada, & penyesuaian stok)",
+	})
+}

@@ -34,6 +34,7 @@ func SetupRoutes(r *gin.Engine) {
 
 			// Permintaan
 			adminAuth.GET("/permintaan", controllers.AdminGetAllPermintaan)
+			adminAuth.DELETE("/permintaan/id", controllers.DeletePermintaan)
 
 			adminPemakaian := adminAuth.Group("/pemakaian")
 			{
@@ -102,6 +103,7 @@ func SetupRoutes(r *gin.Engine) {
 			{
 				pembelian.GET("/", controllers.PurchaseReqList)
 				pembelian.GET("/invoice/:id", controllers.PurchaseInvoiceDetail)
+				pembelian.DELETE("/:id", controllers.DeletePembelian)
 			}
 			penjualan := adminAuth.Group("/penjualan")
 			{
