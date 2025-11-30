@@ -35,6 +35,7 @@ func main() {
 		&models.PurchaseInvoice{},
 		&models.PurchaseInvoiceItem{},
 
+		&models.Permintaan{},
 		&models.UsageRequest{},
 		&models.UsageItem{},
 
