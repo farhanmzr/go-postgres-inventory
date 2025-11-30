@@ -304,6 +304,14 @@ func PurchaseInvoiceDetail(c *gin.Context) {
 }
 
 func DeletePembelian(c *gin.Context) {
+
+	// 0) Hanya admin yang boleh delete
+	_, err := currentAdminID(c) // cukup cek valid admin, nggak perlu pakai nilainya kalau belum dibutuhkan
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "error": err.Error()})
+		return
+	}
+
 	// ambil id purchase_request dari path param
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
@@ -326,10 +334,6 @@ func DeletePembelian(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengambil data pembelian", "error": err.Error()})
 		return
 	}
-
-	// (opsional) cek otorisasi: hanya pembuat / admin yang boleh hapus
-	// rawID, _ := c.Get("user_id")
-	// ...
 
 	err = config.DB.Transaction(func(tx *gorm.DB) error {
 

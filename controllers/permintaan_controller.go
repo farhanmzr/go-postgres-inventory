@@ -83,7 +83,7 @@ func DeletePermintaan(c *gin.Context) {
 	// ID permintaan dari URL param
 	id := c.Param("id")
 
-	uid, err := currentUserID(c)
+	_, err := currentAdminID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "error": err.Error()})
 		return
@@ -97,11 +97,11 @@ func DeletePermintaan(c *gin.Context) {
 		return
 	}
 
-	// cek apakah ini milik user (hanya creator yang boleh hapus)
-	if data.CreatedByID != uid {
-		c.JSON(http.StatusForbidden, gin.H{"message": "Kamu tidak punya izin menghapus permintaan ini"})
-		return
-	}
+	// // cek apakah ini milik user (hanya creator yang boleh hapus)
+	// if data.CreatedByID != uid {
+	// 	c.JSON(http.StatusForbidden, gin.H{"message": "Kamu tidak punya izin menghapus permintaan ini"})
+	// 	return
+	// }
 
 	// delete
 	if err := config.DB.Delete(&data).Error; err != nil {
