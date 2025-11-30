@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"go-postgres-inventory/config"
 	"go-postgres-inventory/models"
 	"net/http"
@@ -401,3 +402,49 @@ func GetStockHistoryByBarang(c *gin.Context) {
 		"total":   total,
 	})
 }
+
+// DELETE /gudang-barang/:id
+func DeleteGudangBarang(c *gin.Context) {
+	idStr := c.Param("id")
+	if idStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak boleh kosong"})
+		return
+	}
+
+	id64, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil || id64 == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak valid"})
+		return
+	}
+	id := uint(id64)
+
+	var gb models.GudangBarang
+	if err := config.DB.First(&gb, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Data gudang-barang tidak ditemukan"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	// OPTIONAL: larang hapus kalau stok masih ada
+	// if gb.Stok != 0 {
+	// 	c.JSON(http.StatusBadRequest, gin.H{
+	// 		"error":   "Tidak bisa menghapus karena stok masih ada",
+	// 		"message": fmt.Sprintf("Stok saat ini: %d", gb.Stok),
+	// 	})
+	// 	return
+	// }
+
+	if err := config.DB.Delete(&gb).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Barang di gudang berhasil dihapus",
+		"id":      id,
+	})
+}
+

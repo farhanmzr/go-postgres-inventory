@@ -159,8 +159,22 @@ func DeleteBarang(c *gin.Context) {
 		return
 	}
 
-	// === CEK DI PEMBELIAN ===
 	var count int64
+	// === CEK DI GUDANG (GudangBarang) ===
+	if err := config.DB.Model(&models.GudangBarang{}).
+		Where("barang_id = ?", barang.ID).
+		Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal cek relasi gudang"})
+		return
+	}
+	if count > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Barang masih terdaftar di salah satu gudang. Hapus dulu dari gudang sebelum menghapus barang master.",
+		})
+		return
+	}
+
+	// === CEK DI PEMBELIAN ===
 	if err := config.DB.Model(&models.PurchaseReqItem{}).
 		Where("barang_id = ?", barang.ID).
 		Count(&count).Error; err != nil {

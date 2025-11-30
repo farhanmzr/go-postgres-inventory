@@ -67,7 +67,7 @@ func SetupRoutes(r *gin.Engine) {
 				gudangBarang.PUT("/:id/stok", controllers.UpdateStokBarang)
 				gudangBarang.GET("/:id/historyStok", controllers.GetStockHistoryByBarang)
 				gudangBarang.PUT("/:id", controllers.UpdateGudangBarang)
-				// gudangBarang.DELETE("/:id", controllers.DeleteGudangBarang)
+				gudangBarang.DELETE("/:id", controllers.DeleteGudangBarang)
 			}
 
 			gudang := adminAuth.Group("/gudang")
