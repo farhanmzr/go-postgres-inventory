@@ -147,7 +147,7 @@ func DeleteGudang(c *gin.Context) {
 	var count int64
 
 	// 1) Cek masih ada barang di gudang ini atau tidak
-	if err := config.DB.Model(&models.Barang{}).
+	if err := config.DB.Model(&models.GudangBarang{}).
 		Where("gudang_id = ?", gudang.ID).
 		Count(&count).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal cek barang di gudang"})
