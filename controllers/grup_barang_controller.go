@@ -67,47 +67,44 @@ func GetGrupBarangByID(c *gin.Context) {
 }
 
 func UpdateGrupBarang(c *gin.Context) {
-    idParam := c.Param("id")
-    id, err := strconv.Atoi(idParam)
-    if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak valid"})
-        return
-    }
-
-    var grup models.GrupBarang
-    if err := config.DB.First(&grup, id).Error; err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Grup Barang tidak ditemukan"})
-        return
-    }
-
-    var input struct {
-        Nama string `json:"nama"`
-        Kode string `json:"kode"`
-    }
-    if err := c.ShouldBindJSON(&input); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Data tidak valid"})
-        return
-    }
-
-    // Cek apakah kode grup barang sudah ada
-	var exist models.GrupBarang
-	if err := config.DB.Where("kode = ?", input.Kode).First(&exist).Error; err == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Kode grup barang sudah digunakan"})
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak valid"})
 		return
 	}
 
-    updateData := models.GrupBarang{
-        Nama: input.Nama,
-        Kode: input.Kode,
-    }
+	var grup models.GrupBarang
+	if err := config.DB.First(&grup, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Grup Barang tidak ditemukan"})
+		return
+	}
 
-    if err := config.DB.Model(&grup).Updates(updateData).Error; err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
+	// request body: hanya nama
+	var input struct {
+		Nama string `json:"nama" binding:"required"`
+	}
 
-    c.JSON(http.StatusOK, gin.H{"message": "Grup Barang berhasil diupdate", "data": grup})
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nama tidak valid"})
+		return
+	}
+
+	// update hanya kolom nama
+	if err := config.DB.Model(&grup).Update("nama", input.Nama).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// reload data terbaru
+	config.DB.First(&grup, grup.ID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Nama Grup Barang berhasil diupdate",
+		"data":    grup,
+	})
 }
+
 
 func DeleteGrupBarang(c *gin.Context) {
     idParam := c.Param("id")
