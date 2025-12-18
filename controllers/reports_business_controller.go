@@ -117,9 +117,9 @@ type PurchaseRow struct {
 }
 
 type PurchaseSummary struct {
-	CountTx   int64 `json:"count_tx"`
-	TotalQty  int64 `json:"total_qty"`
-	Subtotal  int64 `json:"subtotal"`
+	CountTx  int64 `json:"count_tx"`
+	TotalQty int64 `json:"total_qty"`
+	Subtotal int64 `json:"subtotal"`
 }
 
 func ReportPurchasesAdmin(c *gin.Context) { reportPurchases(c, nil) }
@@ -131,7 +131,6 @@ func ReportPurchasesUser(c *gin.Context) {
 	}
 	reportPurchases(c, &uid)
 }
-
 
 func reportPurchases(c *gin.Context, onlyUserID *uint) {
 	db := config.DB
@@ -191,7 +190,8 @@ func reportPurchases(c *gin.Context, onlyUserID *uint) {
 	if err := db.Table("(?) as x", q.Session(&gorm.Session{})).
 		Select("COUNT(*) AS count_tx, COALESCE(SUM(total_qty),0) AS total_qty, COALESCE(SUM(subtotal),0) AS subtotal").
 		Scan(&summary).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	// sorting + paging
@@ -205,7 +205,8 @@ func reportPurchases(c *gin.Context, onlyUserID *uint) {
 
 	var rows []PurchaseRow
 	if err := q.Scan(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -218,28 +219,28 @@ func reportPurchases(c *gin.Context, onlyUserID *uint) {
 // ================= Laporan Penjualan (berdasarkan INVOICE) =================
 
 type SalesRow struct {
-	InvoiceNo     string    `json:"invoice_no"`
-	InvoiceDate   time.Time `json:"invoice_date"`
-	Username      string    `json:"username"`
-	Payment       string    `json:"payment"`
-	Subtotal      int64     `json:"subtotal"`
-	Discount      int64     `json:"discount"`
-	Tax           int64     `json:"tax"`
-	GrandTotal    int64     `json:"grand_total"`
-	SalesRequestID uint     `json:"sales_request_id"`
-	CreatedByID   uint      `json:"created_by_id"`
-	CustomerID    uint      `json:"customer_id"`
-	CustomerName  string    `json:"customer_name"`
-	WarehouseID   uint      `json:"warehouse_id"`
-	WarehouseName string    `json:"warehouse_name"`
-	ItemCount     int64     `json:"item_count"`
-	TotalQty      int64     `json:"total_qty"`
+	InvoiceNo      string    `json:"invoice_no"`
+	InvoiceDate    time.Time `json:"invoice_date"`
+	Username       string    `json:"username"`
+	Payment        string    `json:"payment"`
+	Subtotal       int64     `json:"subtotal"`
+	Discount       int64     `json:"discount"`
+	Tax            int64     `json:"tax"`
+	GrandTotal     int64     `json:"grand_total"`
+	SalesRequestID uint      `json:"sales_request_id"`
+	CreatedByID    uint      `json:"created_by_id"`
+	CustomerID     uint      `json:"customer_id"`
+	CustomerName   string    `json:"customer_name"`
+	WarehouseID    uint      `json:"warehouse_id"`
+	WarehouseName  string    `json:"warehouse_name"`
+	ItemCount      int64     `json:"item_count"`
+	TotalQty       int64     `json:"total_qty"`
 }
 
 type SalesSummary struct {
-	CountTx   int64 `json:"count_tx"`
-	TotalQty  int64 `json:"total_qty"`
-	GrandTot  int64 `json:"grand_total"`
+	CountTx  int64 `json:"count_tx"`
+	TotalQty int64 `json:"total_qty"`
+	GrandTot int64 `json:"grand_total"`
 }
 
 func ReportSalesAdmin(c *gin.Context) { reportSales(c, nil) }
@@ -314,7 +315,8 @@ func reportSales(c *gin.Context, onlyUserID *uint) {
 	if err := db.Table("(?) as x", q.Session(&gorm.Session{})).
 		Select("COUNT(*) as count_tx, COALESCE(SUM(total_qty),0) as total_qty, COALESCE(SUM(grand_total),0) as grand_total").
 		Scan(&summary).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	allowed := map[string]string{
@@ -326,7 +328,8 @@ func reportSales(c *gin.Context, onlyUserID *uint) {
 
 	var rows []SalesRow
 	if err := q.Scan(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -369,7 +372,6 @@ func ReportUsageUser(c *gin.Context) {
 	}
 	reportUsage(c, &uid)
 }
-
 
 func reportUsage(c *gin.Context, onlyUserID *uint) {
 	db := config.DB
@@ -428,7 +430,8 @@ func reportUsage(c *gin.Context, onlyUserID *uint) {
 	if err := db.Table("(?) as x", q.Session(&gorm.Session{})).
 		Select("COUNT(*) as count_tx, COALESCE(SUM(total_qty),0) as total_qty").
 		Scan(&summary).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	allowed := map[string]string{
@@ -440,7 +443,8 @@ func reportUsage(c *gin.Context, onlyUserID *uint) {
 
 	var rows []UsageRow
 	if err := q.Scan(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -486,13 +490,20 @@ func reportPermintaan(c *gin.Context, onlyUserID *uint) {
 
 	q := db.Table("permintaans p").
 		Select(`
-			p.id,
-			p.tanggal_permintaan,
-			p.nama_peminta,
-			p.kode_peminta,
-			p.keterangan,
-			p.created_by_id
-		`)
+        p.id,
+        p.tanggal_permintaan,
+        p.nama_peminta,
+        p.kode_peminta,
+        p.keterangan,
+        p.created_by_id
+    `).
+		Where(`
+        EXISTS (
+            SELECT 1
+            FROM permintaan_items pi
+            WHERE pi.permintaan_id = p.id
+        )
+    `)
 
 	if dateFrom != nil {
 		q = q.Where("p.tanggal_permintaan >= ?", dateFrom.Truncate(24*time.Hour))
@@ -508,7 +519,8 @@ func reportPermintaan(c *gin.Context, onlyUserID *uint) {
 	if err := db.Table("(?) as x", q.Session(&gorm.Session{})).
 		Select("COUNT(*) as count_tx").
 		Scan(&summary).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	allowed := map[string]string{
@@ -519,7 +531,8 @@ func reportPermintaan(c *gin.Context, onlyUserID *uint) {
 
 	var rows []PermintaanRow
 	if err := q.Scan(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -532,17 +545,17 @@ func reportPermintaan(c *gin.Context, onlyUserID *uint) {
 // ================= Laporan Keuntungan Per Barang =================
 
 type ProfitPerBarangRow struct {
-	BarangID    uint    `json:"barang_id"`
-	Kode        string  `json:"kode"`
-	Nama        string  `json:"nama"`
-	Satuan      string  `json:"satuan"`
-	QtySold     int64   `json:"qty_sold"`
-	Revenue     int64   `json:"revenue"`       // SUM(price * qty)
-	Cost        int64   `json:"cost"`          // SUM(cost_price * qty)
-	Profit      int64   `json:"profit"`        // SUM(profit_total)
-	AvgPrice    float64 `json:"avg_price"`     // revenue / qty
-	AvgCost     float64 `json:"avg_cost"`      // cost / qty
-	ProfitPerU  float64 `json:"profit_per_unit"`
+	BarangID   uint    `json:"barang_id"`
+	Kode       string  `json:"kode"`
+	Nama       string  `json:"nama"`
+	Satuan     string  `json:"satuan"`
+	QtySold    int64   `json:"qty_sold"`
+	Revenue    int64   `json:"revenue"`   // SUM(price * qty)
+	Cost       int64   `json:"cost"`      // SUM(cost_price * qty)
+	Profit     int64   `json:"profit"`    // SUM(profit_total)
+	AvgPrice   float64 `json:"avg_price"` // revenue / qty
+	AvgCost    float64 `json:"avg_cost"`  // cost / qty
+	ProfitPerU float64 `json:"profit_per_unit"`
 }
 
 type ProfitSummary struct {
@@ -615,17 +628,18 @@ func reportProfitPerBarang(c *gin.Context, onlyUserID *uint) {
 	if err := db.Table("(?) as x", agg.Session(&gorm.Session{})).
 		Select("COALESCE(SUM(qty_sold),0) AS total_qty, COALESCE(SUM(revenue),0) AS revenue, COALESCE(SUM(cost),0) AS cost, COALESCE(SUM(profit),0) AS profit").
 		Scan(&summary).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	// paging + sorting
 	allowed := map[string]string{
-		"nama":     "nama",
-		"kode":     "kode",
-		"qty":      "qty_sold",
-		"revenue":  "revenue",
-		"cost":     "cost",
-		"profit":   "profit",
+		"nama":    "nama",
+		"kode":    "kode",
+		"qty":     "qty_sold",
+		"revenue": "revenue",
+		"cost":    "cost",
+		"profit":  "profit",
 	}
 	// terapkan sort dan paging ke query utama
 	agg = applyPagingSort(agg, page, size, sortBy, allowed, "profit DESC")
@@ -641,7 +655,8 @@ func reportProfitPerBarang(c *gin.Context, onlyUserID *uint) {
 		Profit   int64
 	}
 	if err := agg.Scan(&raw).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	// hitung avg price/cost di Go
