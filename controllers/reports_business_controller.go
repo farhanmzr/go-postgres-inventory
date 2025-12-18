@@ -497,13 +497,7 @@ func reportPermintaan(c *gin.Context, onlyUserID *uint) {
         p.keterangan,
         p.created_by_id
     `).
-		Where(`
-        EXISTS (
-            SELECT 1
-            FROM permintaan_items pi
-            WHERE pi.permintaan_id = p.id
-        )
-    `)
+		Where("p.deleted_at IS NULL")
 
 	if dateFrom != nil {
 		q = q.Where("p.tanggal_permintaan >= ?", dateFrom.Truncate(24*time.Hour))
