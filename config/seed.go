@@ -26,6 +26,10 @@ func SeedPermissions() {
 		//EDIT
 		{Code: "EDIT_PEMAKAIAN", Name: "Edit Pemakaian"},
 
+		//WALLET
+		{Code: "ADD_WALLET", Name: "Menambahkan Kas/Bank Gudang"},
+		{Code: "TRANSACTION_WALLET", Name: "Menambahkan Income/Outcome Wallet Gudang"},
+
 		//DELETE
 		{Code: "DELETE_PEMBELIAN", Name: "Hapus Pembelian"},
 		{Code: "DELETE_PENJUALAN", Name: "Hapus Penjualan"},

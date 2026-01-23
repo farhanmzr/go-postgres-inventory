@@ -111,7 +111,7 @@ func SetupRoutes(r *gin.Engine) {
 				penjualan.POST("/:id/approve", controllers.SalesReqApprove)
 				penjualan.POST("/:id/reject", controllers.SalesReqReject)
 				penjualan.GET("/invoice/:id", controllers.SalesInvoiceDetail)
-				pembelian.DELETE("/:id", controllers.DeletePenjualanAdmin)
+				penjualan.DELETE("/:id", controllers.DeletePenjualanAdmin)
 			}
 			reports := adminAuth.Group("/reports")
 			{
@@ -127,6 +127,7 @@ func SetupRoutes(r *gin.Engine) {
 			piutangAdmin := adminAuth.Group("/piutang")
 			{
 				piutangAdmin.GET("/", controllers.PiutangListAdmin)
+				piutangAdmin.GET("/:id/history", controllers.PiutangReceiptHistory)
 			}
 
 			hutangAdmin := adminAuth.Group("/hutang")
@@ -136,16 +137,16 @@ func SetupRoutes(r *gin.Engine) {
 			}
 
 			wallet := adminAuth.Group("/wallet")
-
-			// gudang wallets
-			wallet.POST("/gudang/:gudang_id/cash", controllers.CreateCashWallet)
-			wallet.POST("/gudang/:gudang_id/bank", controllers.CreateBankWallet)
-			wallet.GET("/gudang/:gudang_id", controllers.ListWalletsByGudang)
-
-			// mutasi
-			wallet.GET("/:wallet_id/tx", controllers.ListWalletTransactions)
-			wallet.POST("/:wallet_id/income", controllers.WalletManualIncome)
-			wallet.POST("/:wallet_id/expense", controllers.WalletManualExpense)
+			{
+				// gudang wallets
+				wallet.POST("/gudang/:gudang_id/cash", controllers.CreateCashWallet)
+				wallet.POST("/gudang/:gudang_id/bank", controllers.CreateBankWallet)
+				wallet.GET("/gudang/:gudang_id", controllers.ListWalletsByGudang)
+				// mutasi
+				wallet.GET("/:wallet_id/tx", controllers.ListWalletTransactions)
+				wallet.POST("/:wallet_id/income", controllers.WalletManualIncome)
+				wallet.POST("/:wallet_id/expense", controllers.WalletManualExpense)
+			}
 
 		}
 
@@ -257,18 +258,28 @@ func SetupRoutes(r *gin.Engine) {
 					reports.GET("/permintaan", controllers.ReportPermintaanUser)
 					reports.GET("/profit/barang", controllers.ReportProfitPerBarangUser)
 				}
-
 				piutangUser := userAuth.Group("/piutang")
 				{
 					piutangUser.GET("/", controllers.PiutangListUser)
 					piutangUser.POST("/:id/receive", controllers.PiutangReceive)
-					piutangUser.POST("/:id/history", controllers.PiutangReceiptHistory)
+					piutangUser.GET("/:id/history", controllers.PiutangReceiptHistory)
 				}
 				hutangUser := userAuth.Group("/hutang")
 				{
 					hutangUser.GET("/", controllers.HutangListUser)
 					hutangUser.POST("/:id/pay", controllers.HutangPay)
 					hutangUser.GET("/:id/history", controllers.HutangPaymentHistory)
+				}
+				wallet := userAuth.Group("/wallet")
+				{
+					// gudang wallets
+					wallet.POST("/gudang/:gudang_id/cash", middlewares.RequirePerm("ADD_WALLET"), controllers.CreateCashWallet)
+					wallet.POST("/gudang/:gudang_id/bank", middlewares.RequirePerm("ADD_WALLET"), controllers.CreateBankWallet)
+					wallet.GET("/gudang/:gudang_id", controllers.ListWalletsByGudang)
+					// mutasi
+					wallet.GET("/:wallet_id/tx", middlewares.RequirePerm("TRANSACTION_WALLET"), controllers.ListWalletTransactions)
+					wallet.POST("/:wallet_id/income", middlewares.RequirePerm("TRANSACTION_WALLET"), controllers.WalletManualIncome)
+					wallet.POST("/:wallet_id/expense", middlewares.RequirePerm("TRANSACTION_WALLET"), controllers.WalletManualExpense)
 				}
 			}
 		}
