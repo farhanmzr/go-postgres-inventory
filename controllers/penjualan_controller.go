@@ -19,12 +19,13 @@ import (
 )
 
 type SalesRequestInput struct {
-	ManualCode  *string     `json:"manual_code"` // biarkan null; admin yang isi nanti
-	SalesDate   time.Time   `json:"sales_date"`  // wajib <= today
-	Username    string      `json:"username"`    // auto nama user
+	ManualCode  *string     `json:"manual_code"`
+	SalesDate   time.Time   `json:"sales_date"`
+	Username    string      `json:"username"`
 	WarehouseID uint        `json:"warehouse_id" binding:"required"`
 	CustomerID  uint        `json:"customer_id" binding:"required"`
-	Payment     string      `json:"payment" binding:"required"` // "CASH" | "CREDIT"
+	Payment     string      `json:"payment" binding:"required"` // CASH | BANK | CREDIT
+	WalletID    *uint       `json:"wallet_id"`                  // wajib untuk CASH/BANK
 	Items       []SalesItem `json:"items" binding:"required,min=1"`
 }
 
@@ -42,7 +43,7 @@ func CreatePenjualan(c *gin.Context) {
 	}
 
 	// validasi payment
-	if in.Payment != "CASH" && in.Payment != "CREDIT" {
+	if in.Payment != "CASH" && in.Payment != "BANK" && in.Payment != "CREDIT" {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Metode pembayaran tidak valid"})
 		return
 	}
@@ -126,6 +127,44 @@ func CreatePenjualan(c *gin.Context) {
 				})
 			}
 
+			for _, it := range in.Items {
+				// lock row stok supaya aman dari race
+				var gb models.GudangBarang
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+					Where("barang_id = ? AND gudang_id = ?", it.BarangID, in.WarehouseID).
+					First(&gb).Error; err != nil {
+					return err
+				}
+				if int64(gb.Stok) < it.Qty {
+					return fmt.Errorf("stok tidak cukup untuk barang_id=%d (stok=%d, minta=%d)", it.BarangID, gb.Stok, it.Qty)
+				}
+			}
+
+			pm := models.PaymentMethod(in.Payment)
+			if pm == models.PaymentCash || pm == models.PaymentBank {
+				if in.WalletID == nil || *in.WalletID == 0 {
+					return fmt.Errorf("wallet_id wajib untuk payment %s", in.Payment)
+				}
+
+				// cek wallet milik gudang dan tipe cocok
+				var w models.WarehouseWallet
+				if err := tx.First(&w, *in.WalletID).Error; err != nil {
+					return err
+				}
+				if w.GudangID != in.WarehouseID {
+					return fmt.Errorf("wallet bukan milik gudang ini")
+				}
+				if !w.IsActive {
+					return fmt.Errorf("wallet tidak aktif")
+				}
+				if pm == models.PaymentCash && w.Type != models.WalletCash {
+					return fmt.Errorf("payment CASH harus pilih wallet tipe CASH (laci)")
+				}
+				if pm == models.PaymentBank && w.Type != models.WalletBank {
+					return fmt.Errorf("payment BANK harus pilih wallet tipe BANK")
+				}
+			}
+
 			// c) insert header
 			data := models.SalesRequest{
 				TransCode:   transCode,
@@ -135,7 +174,8 @@ func CreatePenjualan(c *gin.Context) {
 				SalesDate:   in.SalesDate,
 				WarehouseID: in.WarehouseID,
 				CustomerID:  in.CustomerID,
-				Payment:     models.PaymentMethod(in.Payment),
+				Payment:     pm,
+				WalletID:    in.WalletID,
 				Status:      models.StatusPending,
 				Items:       items,
 				CreatedByID: userID,
@@ -241,4 +281,86 @@ func SalesInvoiceDetail(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil data Invoice", "data": inv})
+}
+
+func DeletePenjualanUser(c *gin.Context) {
+	// route user: RequireAuth + RequirePerm("DELETE_PENJUALAN") (atau apa pun di sistemmu)
+	_, err := currentUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "error": err.Error()})
+		return
+	}
+
+	id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "id tidak valid"})
+		return
+	}
+	id := uint(id64)
+
+	err = config.DB.Transaction(func(tx *gorm.DB) error {
+		// lock row request
+		var sr models.SalesRequest
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Preload("Items").
+			First(&sr, id).Error; err != nil {
+			return err
+		}
+
+		// // (opsional) kalau user hanya boleh delete miliknya
+		// if sr.CreatedByID != uid {
+		// 	return errors.New("forbidden")
+		// }
+
+		// hanya boleh delete jika PENDING atau REJECTED
+		if sr.Status != models.StatusPending && sr.Status != models.StatusRejected {
+			return errors.New("tidak bisa delete: hanya PENDING/REJECTED")
+		}
+
+		// safety: kalau ada invoice, jangan delete
+		var invCnt int64
+		if err := tx.Model(&models.SalesInvoice{}).
+			Where("sales_request_id = ?", sr.ID).
+			Count(&invCnt).Error; err != nil {
+			return err
+		}
+		if invCnt > 0 {
+			return errors.New("tidak bisa delete: invoice sudah ada")
+		}
+
+		// safety: kalau ada piutang (harusnya tidak ada kalau belum approve)
+		var piuCnt int64
+		if err := tx.Model(&models.Piutang{}).
+			Where("sales_request_id = ?", sr.ID).
+			Count(&piuCnt).Error; err != nil {
+			return err
+		}
+		if piuCnt > 0 {
+			return errors.New("tidak bisa delete: piutang sudah ada")
+		}
+
+		// hapus items dulu (kalau relasi belum cascade)
+		if err := tx.Where("sales_request_id = ?", sr.ID).
+			Delete(&models.SalesReqItem{}).Error; err != nil {
+			return err
+		}
+
+		// hapus header
+		if err := tx.Delete(&sr).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		code := http.StatusBadRequest
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			code = http.StatusNotFound
+		}
+		c.JSON(code, gin.H{"message": "Gagal menghapus Penjualan", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Berhasil menghapus Penjualan"})
 }

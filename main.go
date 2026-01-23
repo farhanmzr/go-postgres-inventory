@@ -44,8 +44,17 @@ func main() {
 		&models.SalesInvoice{},
 		&models.SalesInvoiceItem{},
 
+		// credit
 		&models.Piutang{},
 		&models.PiutangItem{},
+		&models.PiutangReceipt{},
+		&models.Hutang{},
+		&models.HutangItem{},
+		&models.HutangPayment{},
+
+		// wallet
+		&models.WarehouseWallet{},
+		&models.WalletTransaction{},
 	); err != nil {
 		log.Fatalf("❌ AutoMigrate error: %v", err)
 	}

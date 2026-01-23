@@ -20,7 +20,18 @@ func SeedPermissions() {
 		{Code: "PERMINTAAN", Name: "Permintaan"},
 		{Code: "CUSTOMER", Name: "Customer"},
 		{Code: "EDIT_STOCK", Name: "Manage Stock"},
-		{Code: "APPROVE_REJECT", Name: "Approve & Reject Penjualan Pemakaian"},
+		{Code: "APPROVE_REJECT_PEMAKAIAN", Name: "Approve & Reject Pemakaian"},
+		{Code: "APPROVE_REJECT_PENJUALAN", Name: "Approve & Reject Penjualan"},
+
+		//EDIT
+		{Code: "EDIT_PEMAKAIAN", Name: "Edit Pemakaian"},
+
+		//DELETE
+		{Code: "DELETE_PEMBELIAN", Name: "Hapus Pembelian"},
+		{Code: "DELETE_PENJUALAN", Name: "Hapus Penjualan"},
+		{Code: "DELETE_PEMAKAIAN", Name: "Hapus Pemakaian"},
+		{Code: "DELETE_PERMINTAAN", Name: "Hapus Permintaan"},
+		
 	}
 	for _, p := range codes {
 		var cnt int64

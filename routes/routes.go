@@ -103,7 +103,7 @@ func SetupRoutes(r *gin.Engine) {
 			{
 				pembelian.GET("/", controllers.PurchaseReqList)
 				pembelian.GET("/invoice/:id", controllers.PurchaseInvoiceDetail)
-				pembelian.DELETE("/:id", controllers.DeletePembelian)
+				pembelian.DELETE("/:id", controllers.DeletePembelianAdmin)
 			}
 			penjualan := adminAuth.Group("/penjualan")
 			{
@@ -111,6 +111,7 @@ func SetupRoutes(r *gin.Engine) {
 				penjualan.POST("/:id/approve", controllers.SalesReqApprove)
 				penjualan.POST("/:id/reject", controllers.SalesReqReject)
 				penjualan.GET("/invoice/:id", controllers.SalesInvoiceDetail)
+				pembelian.DELETE("/:id", controllers.DeletePenjualanAdmin)
 			}
 			reports := adminAuth.Group("/reports")
 			{
@@ -126,8 +127,26 @@ func SetupRoutes(r *gin.Engine) {
 			piutangAdmin := adminAuth.Group("/piutang")
 			{
 				piutangAdmin.GET("/", controllers.PiutangListAdmin)
-				piutangAdmin.POST("/:id/approve", controllers.PiutangApprovePayment)
 			}
+
+			hutangAdmin := adminAuth.Group("/hutang")
+			{
+				hutangAdmin.GET("/", controllers.HutangListAdmin)
+				hutangAdmin.GET("/:id/history", controllers.HutangPaymentHistoryAdmin)
+			}
+
+			wallet := adminAuth.Group("/wallet")
+
+			// gudang wallets
+			wallet.POST("/gudang/:gudang_id/cash", controllers.CreateCashWallet)
+			wallet.POST("/gudang/:gudang_id/bank", controllers.CreateBankWallet)
+			wallet.GET("/gudang/:gudang_id", controllers.ListWalletsByGudang)
+
+			// mutasi
+			wallet.GET("/:wallet_id/tx", controllers.ListWalletTransactions)
+			wallet.POST("/:wallet_id/income", controllers.WalletManualIncome)
+			wallet.POST("/:wallet_id/expense", controllers.WalletManualExpense)
+
 		}
 
 		// ================= USER (customer) APP =================
@@ -162,12 +181,14 @@ func SetupRoutes(r *gin.Engine) {
 					penjualan.GET("/", controllers.SalesReqUserList)
 					penjualan.POST("/", controllers.CreatePenjualan)
 					penjualan.GET("/invoice/:id", controllers.SalesInvoiceDetail)
+					penjualan.DELETE("/:id", middlewares.RequirePerm("DELETE_PENJUALAN"), controllers.DeletePenjualanUser)
 				}
 				pembelian := userAuth.Group("/pembelian", middlewares.RequirePerm("PURCHASE"))
 				{
 					pembelian.GET("/", controllers.PurchaseReqMyList)
 					pembelian.POST("/", controllers.CreatePembelian)
 					pembelian.GET("/invoice/:id", controllers.PurchaseInvoiceDetail)
+					pembelian.DELETE("/:id", middlewares.RequirePerm("DELETE_PEMBELIAN"), controllers.DeletePembelianUser)
 				}
 				customer := userAuth.Group("/customer")
 				{
@@ -240,7 +261,14 @@ func SetupRoutes(r *gin.Engine) {
 				piutangUser := userAuth.Group("/piutang")
 				{
 					piutangUser.GET("/", controllers.PiutangListUser)
-					piutangUser.POST("/:id/pay", controllers.PiutangRequestPay)
+					piutangUser.POST("/:id/receive", controllers.PiutangReceive)
+					piutangUser.POST("/:id/history", controllers.PiutangReceiptHistory)
+				}
+				hutangUser := userAuth.Group("/hutang")
+				{
+					hutangUser.GET("/", controllers.HutangListUser)
+					hutangUser.POST("/:id/pay", controllers.HutangPay)
+					hutangUser.GET("/:id/history", controllers.HutangPaymentHistory)
 				}
 			}
 		}

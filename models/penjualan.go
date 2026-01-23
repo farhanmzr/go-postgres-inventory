@@ -11,6 +11,7 @@ const (
 	StatusRejected SalesStatus = "REJECTED"
 )
 
+
 type SalesRequest struct {
 	ID          uint          `gorm:"primaryKey" json:"id"`
 	TransCode   string        `gorm:"uniqueIndex:idx_sales_trans_code;size:64" json:"trans_code"`
@@ -23,6 +24,8 @@ type SalesRequest struct {
 	CustomerID  uint          `json:"customer_id"`
 	Customer    Customer      `json:"customer"`
 	Payment     PaymentMethod `gorm:"size:10" json:"payment"`
+
+	WalletID *uint `gorm:"index" json:"wallet_id,omitempty"`
 
 	Status       SalesStatus `gorm:"size:12;index" json:"status"`
 	RejectReason *string     `gorm:"size:255" json:"reject_reason"`

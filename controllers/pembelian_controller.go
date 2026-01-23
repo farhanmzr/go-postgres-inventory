@@ -23,6 +23,7 @@ type PurchaseRequestInput struct {
 	WarehouseID  uint           `json:"warehouse_id" binding:"required"`
 	SupplierID   uint           `json:"supplier_id" binding:"required"`
 	Payment      string         `json:"payment" binding:"required"` // "CASH" | "CREDIT"
+	WalletID     *uint          `json:"wallet_id"`
 	Items        []PurchaseItem `json:"items" binding:"required,min=1"`
 }
 
@@ -43,7 +44,7 @@ func CreatePembelian(c *gin.Context) {
 	}
 
 	// validasi payment
-	if in.Payment != "CASH" && in.Payment != "CREDIT" {
+	if in.Payment != "CASH" && in.Payment != "BANK" && in.Payment != "CREDIT" {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Metode pembayaran tidak valid"})
 		return
 	}
@@ -135,10 +136,16 @@ func CreatePembelian(c *gin.Context) {
 				return fmt.Errorf("barang %d tidak ditemukan di gudang %d", it.BarangID, pembelianData.WarehouseID)
 			}
 
-			// update harga beli terakhir di GudangBarang
+			// 2) update harga beli + harga jual (10%)
+			buy := float64(it.BuyPrice)
+			sell := buy * 1.10
+
 			if err := tx.Model(&models.GudangBarang{}).
-				Where("barang_id = ? AND gudang_id = ? AND harga_beli <> ?", it.BarangID, pembelianData.WarehouseID, float64(it.BuyPrice)).
-				Update("harga_beli", float64(it.BuyPrice)).Error; err != nil {
+				Where("barang_id = ? AND gudang_id = ?", it.BarangID, pembelianData.WarehouseID).
+				Updates(map[string]any{
+					"harga_beli": buy,
+					"harga_jual": sell,
+				}).Error; err != nil {
 				return err
 			}
 		}
@@ -176,19 +183,19 @@ func CreatePembelian(c *gin.Context) {
 			return err
 		}
 
-		// 6) Jika payment CREDIT -> buat Piutang
+		// 6) Jika payment CREDIT -> buat Hutang
 		if pembelianData.Payment == models.PaymentCredit {
 			due := inv.InvoiceDate.AddDate(0, 0, 7)
 
 			// siapkan items snapshot dari invoice
-			piuItems := make([]models.PiutangItem, 0, len(invItems))
+			hutangItems := make([]models.HutangItem, 0, len(invItems))
 			for _, iv := range invItems {
 				// ambil nama & kode barang untuk snapshot
 				var b models.Barang
 				if err := tx.Select("id, nama, kode").First(&b, iv.BarangID).Error; err != nil {
 					return err
 				}
-				piuItems = append(piuItems, models.PiutangItem{
+				hutangItems = append(hutangItems, models.HutangItem{
 					BarangID:  iv.BarangID,
 					Nama:      b.Nama,
 					Kode:      b.Kode,
@@ -198,25 +205,73 @@ func CreatePembelian(c *gin.Context) {
 				})
 			}
 
-			piu := models.Piutang{
-				UserID:      userID,
-				UserName:    pembelianData.BuyerName, // display
-				Source:      models.CreditFromPurchase,
-				SourceID:    inv.PurchaseRequestID, // invoice PK = PurchaseRequestID
-				InvoiceNo:   inv.InvoiceNo,
-				InvoiceDate: inv.InvoiceDate,
-				DueDate:     due,
-				Total:       inv.GrandTotal,
-				Status:      models.CreditUnpaid,
-				Items:       piuItems,
+			var sup models.Supplier
+			if err := tx.Select("id", "nama").First(&sup, pembelianData.SupplierID).Error; err != nil {
+				return err
 			}
-			if err := tx.Create(&piu).Error; err != nil {
+
+			hutang := models.Hutang{
+				UserID:            userID,
+				UserName:          pembelianData.BuyerName, // display
+				SupplierID:        pembelianData.SupplierID,
+				SupplierName:      sup.Nama,
+				PurchaseRequestID: inv.PurchaseRequestID, // invoice PK = PurchaseRequestID
+				InvoiceNo:         inv.InvoiceNo,
+				InvoiceDate:       inv.InvoiceDate,
+				DueDate:           due,
+				Total:             inv.GrandTotal,
+				Items:             hutangItems,
+			}
+			if err := tx.Create(&hutang).Error; err != nil {
+				return err
+			}
+		} else {
+			payLabel := string(pembelianData.Payment) // "CASH" atau "BANK"
+
+			if in.WalletID == nil || *in.WalletID == 0 {
+				return fmt.Errorf("wallet_id wajib untuk pembelian %s", payLabel)
+			}
+
+			// simpan wallet_id ke header
+			if err := tx.Model(&models.PurchaseRequest{}).
+				Where("id = ?", pembelianData.ID).
+				Update("wallet_id", *in.WalletID).Error; err != nil {
+				return err
+			}
+
+			// OPTIONAL: cocokkan payment radio dengan type wallet
+			// - kalau payment BANK, wallet harus Type=BANK
+			// - kalau payment CASH, wallet harus Type=CASH
+			var w models.WarehouseWallet
+			if err := tx.First(&w, *in.WalletID).Error; err != nil {
+				return err
+			}
+			if w.GudangID != pembelianData.WarehouseID {
+				return fmt.Errorf("wallet bukan milik gudang ini")
+			}
+			if pembelianData.Payment == models.PaymentCash && w.Type != models.WalletCash {
+				return fmt.Errorf("payment CASH harus pilih wallet tipe CASH (laci)")
+			}
+			if pembelianData.Payment == models.PaymentBank && w.Type != models.WalletBank {
+				return fmt.Errorf("payment BANK harus pilih wallet tipe BANK")
+			}
+
+			// debit saldo wallet (applyWalletDelta harus cek saldo cukup)
+			if err := applyWalletDelta(
+				tx,
+				*in.WalletID,
+				pembelianData.WarehouseID,
+				-inv.GrandTotal,
+				models.WalletTxPurchasePaid, // bisa rename jadi PurchasePaid jika mau
+				"purchase_request",
+				pembelianData.ID,
+				userID,
+				"Pembelian "+payLabel,
+			); err != nil {
 				return err
 			}
 		}
-
 		return nil
-
 	})
 
 	if err != nil {
@@ -303,30 +358,75 @@ func PurchaseInvoiceDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil data Invoice", "data": inv})
 }
 
-func DeletePembelian(c *gin.Context) {
+func deletePembelianCore(tx *gorm.DB, pr *models.PurchaseRequest) error {
+	// 1) revert stok
+	for _, it := range pr.Items {
+		var gb models.GudangBarang
+		if err := tx.Where("barang_id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
+			First(&gb).Error; err != nil {
+			return fmt.Errorf("data stok gudang untuk barang %d tidak ditemukan: %w", it.BarangID, err)
+		}
 
-	// 0) Hanya admin yang boleh delete
-	_, err := currentAdminID(c) // cukup cek valid admin, nggak perlu pakai nilainya kalau belum dibutuhkan
-	if err != nil {
+		if err := tx.Model(&models.GudangBarang{}).
+			Where("barang_id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
+			UpdateColumn("stok", gorm.Expr("stok - ?", it.Qty)).Error; err != nil {
+			return err
+		}
+	}
+
+	// 2) kalau CREDIT hapus hutang (dan guard status)
+	if pr.Payment == models.PaymentCredit {
+		var h models.Hutang
+		err := tx.Where("purchase_request_id = ?", pr.ID).First(&h).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err == nil {
+			if h.TotalPaid > 0 || h.IsPaid {
+				return fmt.Errorf("Tidak bisa delete: hutang sudah ada pembayaran (total_paid=%d)", h.TotalPaid)
+			}
+
+			if err := tx.Delete(&h).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	// 3) hapus invoice
+	if err := tx.Where("purchase_request_id = ?", pr.ID).
+		Delete(&models.PurchaseInvoice{}).Error; err != nil {
+		return err
+	}
+
+	// 4) hapus items PR
+	if err := tx.Where("purchase_request_id = ?", pr.ID).
+		Delete(&models.PurchaseReqItem{}).Error; err != nil {
+		return err
+	}
+
+	// 5) hapus header
+	if err := tx.Delete(pr).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func DeletePembelianUser(c *gin.Context) {
+	// route sudah pakai RequirePerm("DELETE_PEMBELIAN")
+	if _, err := currentUserID(c); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "error": err.Error()})
 		return
 	}
 
-	// ambil id purchase_request dari path param
-	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 64)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "id tidak valid"})
 		return
 	}
 
 	var pr models.PurchaseRequest
-
-	// load header + items
-	if err := config.DB.
-		Preload("Items").
-		First(&pr, uint(id)).Error; err != nil {
-
+	if err := config.DB.Preload("Items").First(&pr, uint(id)).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Pembelian tidak ditemukan"})
 			return
@@ -336,68 +436,117 @@ func DeletePembelian(c *gin.Context) {
 	}
 
 	err = config.DB.Transaction(func(tx *gorm.DB) error {
-
-		// 1) Revert stok gudang (kurangi lagi sesuai qty pembelian)
-		for _, it := range pr.Items {
-			var gb models.GudangBarang
-			if err := tx.
-				Where("barang_id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
-				First(&gb).Error; err != nil {
-
-				return fmt.Errorf("data stok gudang untuk barang %d tidak ditemukan: %w", it.BarangID, err)
-			}
-
-			if err := tx.Model(&models.GudangBarang{}).
-				Where("barang_id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
-				UpdateColumn("stok", gorm.Expr("stok - ?", it.Qty)).Error; err != nil {
-				return err
-			}
-		}
-
-		// 2) Kalau payment CREDIT, hapus piutang yang berasal dari pembelian ini
-		if pr.Payment == models.PaymentCredit {
-			// waktu create: Source = PURCHASE, SourceID = inv.PurchaseRequestID (== pr.ID)
-			if err := tx.
-				Where("source = ? AND source_id = ?", models.CreditFromPurchase, pr.ID).
-				Delete(&models.Piutang{}).Error; err != nil {
-				return err
-			}
-			// PiutangItem ikut kehapus karena sudah OnDelete:CASCADE
-		}
-
-		// 3) Hapus invoice (dan otomatis detailnya via OnDelete:CASCADE)
-		// PK invoice = PurchaseRequestID, jadi cukup where di situ
-		if err := tx.
-			Where("purchase_request_id = ?", pr.ID).
-			Delete(&models.PurchaseInvoice{}).Error; err != nil {
-			return err
-		}
-
-		// 4) Hapus detail purchase request
-		if err := tx.
-			Where("purchase_request_id = ?", pr.ID).
-			Delete(&models.PurchaseReqItem{}).Error; err != nil {
-			return err
-		}
-
-		// 5) Terakhir, hapus header purchase request
-		if err := tx.Delete(&pr).Error; err != nil {
-			return err
-		}
-
-		return nil
+		return deletePembelianCore(tx, &pr)
 	})
-
 	if err != nil {
-		fmt.Printf("DeletePembelian error: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "Gagal menghapus Pembelian",
-			"error":   err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Gagal menghapus Pembelian", "error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Berhasil menghapus Pembelian (termasuk invoice, piutang jika ada, & penyesuaian stok)",
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "Berhasil menghapus Pembelian (user permission)"})
 }
+
+// func DeletePembelian(c *gin.Context) {
+
+// 	// 0) Hanya admin yang boleh delete
+// 	// _, err := currentAdminID(c) // cukup cek valid admin, nggak perlu pakai nilainya kalau belum dibutuhkan
+// 	// if err != nil {
+// 	// 	c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "error": err.Error()})
+// 	// 	return
+// 	// }
+
+// 	// ambil id purchase_request dari path param
+// 	idStr := c.Param("id")
+// 	id, err := strconv.ParseUint(idStr, 10, 64)
+// 	if err != nil {
+// 		c.JSON(http.StatusBadRequest, gin.H{"message": "id tidak valid"})
+// 		return
+// 	}
+
+// 	var pr models.PurchaseRequest
+
+// 	// load header + items
+// 	if err := config.DB.
+// 		Preload("Items").
+// 		First(&pr, uint(id)).Error; err != nil {
+
+// 		if errors.Is(err, gorm.ErrRecordNotFound) {
+// 			c.JSON(http.StatusNotFound, gin.H{"message": "Pembelian tidak ditemukan"})
+// 			return
+// 		}
+// 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengambil data pembelian", "error": err.Error()})
+// 		return
+// 	}
+
+// 	err = config.DB.Transaction(func(tx *gorm.DB) error {
+
+// 		// 1) Revert stok gudang (kurangi lagi sesuai qty pembelian)
+// 		for _, it := range pr.Items {
+// 			var gb models.GudangBarang
+// 			if err := tx.
+// 				Where("barang_id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
+// 				First(&gb).Error; err != nil {
+
+// 				return fmt.Errorf("data stok gudang untuk barang %d tidak ditemukan: %w", it.BarangID, err)
+// 			}
+
+// 			if err := tx.Model(&models.GudangBarang{}).
+// 				Where("barang_id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
+// 				UpdateColumn("stok", gorm.Expr("stok - ?", it.Qty)).Error; err != nil {
+// 				return err
+// 			}
+// 		}
+
+// 		// 2) Kalau payment CREDIT, hapus piutang yang berasal dari pembelian ini
+// 		if pr.Payment == models.PaymentCredit {
+// 			var h models.Hutang
+// 			err := tx.Where("purchase_request_id = ?", pr.ID).First(&h).Error
+// 			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+// 				return err
+// 			}
+// 			if err == nil {
+// 				if h.Status != models.HutangUnpaid { // sesuaikan constant kamu
+// 					return fmt.Errorf("tidak bisa delete: hutang status %s", h.Status)
+// 				}
+// 				if err := tx.Delete(&h).Error; err != nil {
+// 					return err
+// 				}
+// 			}
+// 		}
+
+// 		// 3) Hapus invoice (dan otomatis detailnya via OnDelete:CASCADE)
+// 		// PK invoice = PurchaseRequestID, jadi cukup where di situ
+// 		if err := tx.
+// 			Where("purchase_request_id = ?", pr.ID).
+// 			Delete(&models.PurchaseInvoice{}).Error; err != nil {
+// 			return err
+// 		}
+
+// 		// 4) Hapus detail purchase request
+// 		if err := tx.
+// 			Where("purchase_request_id = ?", pr.ID).
+// 			Delete(&models.PurchaseReqItem{}).Error; err != nil {
+// 			return err
+// 		}
+
+// 		// 5) Terakhir, hapus header purchase request
+// 		if err := tx.Delete(&pr).Error; err != nil {
+// 			return err
+// 		}
+
+// 		return nil
+// 	})
+
+// 	if err != nil {
+// 		fmt.Printf("DeletePembelian error: %v\n", err)
+// 		c.JSON(http.StatusInternalServerError, gin.H{
+// 			"message": "Gagal menghapus Pembelian",
+// 			"error":   err.Error(),
+// 		})
+// 		return
+// 	}
+
+// 	c.JSON(http.StatusOK, gin.H{
+// 		"message": "Berhasil menghapus Pembelian (termasuk invoice, piutang jika ada, & penyesuaian stok)",
+// 	})
+// }

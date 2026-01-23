@@ -6,8 +6,9 @@ import "time"
 type PaymentMethod string
 
 const (
-	PaymentCash   PaymentMethod = "CASH"
-	PaymentCredit PaymentMethod = "CREDIT"
+    PaymentCash   PaymentMethod = "CASH"
+    PaymentBank   PaymentMethod = "BANK"
+    PaymentCredit PaymentMethod = "CREDIT"
 )
 
 type PurchaseRequest struct {
@@ -22,12 +23,13 @@ type PurchaseRequest struct {
 	Supplier     Supplier      `json:"supplier"`
 	Payment      PaymentMethod `gorm:"size:10" json:"payment"`
 
+	WalletID     *uint         `gorm:"index" json:"wallet_id,omitempty"`
+
 	Items []PurchaseReqItem `json:"items"`
 
 	CreatedByID uint      `json:"created_by_id"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
-
 }
 
 type PurchaseReqItem struct {

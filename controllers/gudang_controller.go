@@ -16,10 +16,6 @@ func CreateGudang(c *gin.Context) {
 		Nama     string `json:"nama"`
 		Kode     string `json:"kode"`
 		Lokasi   string `json:"lokasi"`
-		Kas      string `json:"kas"`
-		KodeKas  string `json:"kode_kas"`
-		Bank     string `json:"bank"`
-		KodeBank string `json:"kode_bank"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Data tidak valid"})
@@ -37,10 +33,6 @@ func CreateGudang(c *gin.Context) {
 		Nama:     input.Nama,
 		Kode:     input.Kode,
 		Lokasi:   input.Lokasi,
-		Kas:      input.Kas,
-		KodeKas:  input.KodeKas,
-		Bank:     input.Bank,
-		KodeBank: input.KodeBank,
 	}
 
 	if err := config.DB.Create(&gudang).Error; err != nil {
@@ -95,10 +87,6 @@ func UpdateGudang(c *gin.Context) {
 		Nama     string `json:"nama"`
 		Kode     string `json:"kode"`
 		Lokasi   string `json:"lokasi"`
-		Kas      string `json:"kas"`
-		KodeKas  string `json:"kode_kas"`
-		Bank     string `json:"bank"`
-		KodeBank string `json:"kode_bank"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Data tidak valid"})
@@ -116,10 +104,6 @@ func UpdateGudang(c *gin.Context) {
 		Nama:     input.Nama,
 		Kode:     input.Kode,
 		Lokasi:   input.Lokasi,
-		Kas:      input.Kas,
-		KodeKas:  input.KodeKas,
-		Bank:     input.Bank,
-		KodeBank: input.KodeBank,
 	}
 
 	if err := config.DB.Model(&gudang).Updates(updateData).Error; err != nil {

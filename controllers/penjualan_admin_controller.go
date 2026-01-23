@@ -7,6 +7,7 @@ import (
 	"go-postgres-inventory/models"
 	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -151,7 +152,47 @@ func SalesReqApprove(c *gin.Context) {
 			return err
 		}
 
-		// 5) Jika payment CREDIT -> buat Piutang
+		// 5) Jika CASH/BANK -> uang masuk ke wallet saat approve
+		if pr.Payment == models.PaymentCash || pr.Payment == models.PaymentBank {
+			if pr.WalletID == nil || *pr.WalletID == 0 {
+				return errors.New("wallet_id wajib untuk CASH/BANK")
+			}
+
+			// (optional) validasi wallet gudang + type cocok
+			var w models.WarehouseWallet
+			if err := tx.First(&w, *pr.WalletID).Error; err != nil {
+				return err
+			}
+			if w.GudangID != pr.WarehouseID {
+				return errors.New("wallet bukan milik gudang ini")
+			}
+			if !w.IsActive {
+				return errors.New("wallet tidak aktif")
+			}
+			if pr.Payment == models.PaymentCash && w.Type != models.WalletCash {
+				return errors.New("payment CASH harus pilih wallet tipe CASH")
+			}
+			if pr.Payment == models.PaymentBank && w.Type != models.WalletBank {
+				return errors.New("payment BANK harus pilih wallet tipe BANK")
+			}
+
+			// saldo IN
+			if err := applyWalletDelta(
+				tx,
+				*pr.WalletID,
+				pr.WarehouseID,
+				+inv.GrandTotal,
+				models.WalletTxSalesPaid, // boleh rename jadi SALES_PAID kalau mau
+				"sales_request",
+				pr.ID,
+				pr.CreatedByID,
+				"Penjualan "+string(pr.Payment),
+			); err != nil {
+				return err
+			}
+		}
+
+		// 6) Jika payment CREDIT -> buat Piutang (model baru)
 		if pr.Payment == models.PaymentCredit {
 			due := inv.InvoiceDate.AddDate(0, 0, 7)
 
@@ -166,22 +207,22 @@ func SalesReqApprove(c *gin.Context) {
 					Nama:      b.Nama,
 					Kode:      b.Kode,
 					Qty:       iv.Qty,
-					Price:     iv.Price, // harga jual per unit
+					Price:     iv.Price,
 					LineTotal: iv.LineTotal,
 				})
 			}
 
 			piu := models.Piutang{
-				UserID:      pr.CreatedByID, // pemilik (user yang membuat sales)
-				UserName:    pr.Username,    // display
-				Source:      models.CreditFromSales,
-				SourceID:    inv.SalesRequestID, // invoice PK = SalesRequestID
-				InvoiceNo:   inv.InvoiceNo,
-				InvoiceDate: inv.InvoiceDate,
-				DueDate:     due,
-				Total:       inv.GrandTotal,
-				Status:      models.CreditUnpaid,
-				Items:       piuItems,
+				UserID:         pr.CreatedByID,
+				UserName:       pr.Username,
+				SalesRequestID: pr.ID,
+				InvoiceNo:      inv.InvoiceNo,
+				InvoiceDate:    inv.InvoiceDate,
+				DueDate:        due,
+				Total:          inv.GrandTotal,
+				TotalPaid:      0,
+				IsPaid:         false,
+				Items:          piuItems,
 			}
 			if err := tx.Create(&piu).Error; err != nil {
 				return err
@@ -265,4 +306,72 @@ func SalesReqReject(c *gin.Context) {
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal reject", "error": err.Error()})
 	}
+}
+
+func DeletePenjualanAdmin(c *gin.Context) {
+	if _, err := currentAdminID(c); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "error": err.Error()})
+		return
+	}
+
+	id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "id tidak valid"})
+		return
+	}
+	id := uint(id64)
+
+	err = config.DB.Transaction(func(tx *gorm.DB) error {
+		var sr models.SalesRequest
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			First(&sr, id).Error; err != nil {
+			return err
+		}
+
+		if sr.Status != models.StatusPending && sr.Status != models.StatusRejected {
+			return errors.New("tidak bisa delete: hanya PENDING/REJECTED")
+		}
+
+		var invCnt int64
+		if err := tx.Model(&models.SalesInvoice{}).
+			Where("sales_request_id = ?", sr.ID).
+			Count(&invCnt).Error; err != nil {
+			return err
+		}
+		if invCnt > 0 {
+			return errors.New("tidak bisa delete: invoice sudah ada")
+		}
+
+		var piuCnt int64
+		if err := tx.Model(&models.Piutang{}).
+			Where("sales_request_id = ?", sr.ID).
+			Count(&piuCnt).Error; err != nil {
+			return err
+		}
+		if piuCnt > 0 {
+			return errors.New("tidak bisa delete: piutang sudah ada")
+		}
+
+		if err := tx.Where("sales_request_id = ?", sr.ID).
+			Delete(&models.SalesReqItem{}).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Delete(&sr).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		code := http.StatusBadRequest
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			code = http.StatusNotFound
+		}
+		c.JSON(code, gin.H{"message": "Gagal menghapus Penjualan", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Berhasil menghapus Penjualan"})
 }
