@@ -3,6 +3,7 @@ package controllers
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"go-postgres-inventory/models"
 
@@ -25,6 +26,7 @@ func applyWalletDelta(
 	refID uint,
 	actorID uint,
 	note string,
+	txDate time.Time,
 ) error {
 	if delta == 0 {
 		return nil
@@ -75,6 +77,7 @@ func applyWalletDelta(
 		RefID:     refID,
 		ActorID:   actorID,
 		Note:      note,
+		TxDate:    txDate,
 	}
 	return tx.Create(&log).Error
 }

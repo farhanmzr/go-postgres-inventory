@@ -26,6 +26,9 @@ type WalletTransaction struct {
 
 	ActorID uint   `gorm:"index;not null" json:"actor_id"`
 	Note    string `gorm:"size:255" json:"note,omitempty"`
+	
+	TxDate time.Time `gorm:"not null" json:"tx_date"`
+
 
 	CreatedAt time.Time `json:"created_at"`
 }

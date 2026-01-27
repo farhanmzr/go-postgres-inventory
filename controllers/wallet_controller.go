@@ -131,7 +131,7 @@ func ListWalletTransactions(c *gin.Context) {
 
 type WalletAdjustInput struct {
     Amount int64     `json:"amount" binding:"required"`
-    Date   time.Time `json:"date"` // opsional
+    Date   time.Time `json:"date" binding:"required"`
     Note   string    `json:"note"`
 }
 
@@ -169,6 +169,7 @@ func WalletManualIncome(c *gin.Context) {
             walletID, // ref id bebas; bisa pakai walletID
             actorID,
             note,
+			in.Date,
         ); err != nil {
             return err
         }
@@ -218,6 +219,7 @@ func WalletManualExpense(c *gin.Context) {
             walletID,
             actorID,
             note,
+			in.Date,
         ); err != nil {
             return err
         }

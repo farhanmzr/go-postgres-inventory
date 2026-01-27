@@ -187,6 +187,7 @@ func SalesReqApprove(c *gin.Context) {
 				pr.ID,
 				pr.CreatedByID,
 				"Penjualan "+string(pr.Payment),
+				inv.InvoiceDate,
 			); err != nil {
 				return err
 			}

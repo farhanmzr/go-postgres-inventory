@@ -267,6 +267,7 @@ func CreatePembelian(c *gin.Context) {
 				pembelianData.ID,
 				userID,
 				"Pembelian "+payLabel,
+				pembelianData.PurchaseDate,
 			); err != nil {
 				return err
 			}
