@@ -12,7 +12,7 @@ type Hutang struct {
 	SupplierName string `gorm:"size:180;not null" json:"supplier_name"`
 
 	PurchaseRequestID uint      `gorm:"not null;index" json:"purchase_request_id"`
-	WarehouseID uint `gorm:"-" json:"warehouse_id"`
+	WarehouseID       uint      `gorm:"index;not null" json:"warehouse_id"`
 	InvoiceNo         string    `gorm:"size:64;not null;index" json:"invoice_no"`
 	InvoiceDate       time.Time `gorm:"not null" json:"invoice_date"`
 	DueDate           time.Time `gorm:"not null" json:"due_date"`
