@@ -216,6 +216,7 @@ func CreatePembelian(c *gin.Context) {
 				SupplierID:        pembelianData.SupplierID,
 				SupplierName:      sup.Nama,
 				PurchaseRequestID: inv.PurchaseRequestID, // invoice PK = PurchaseRequestID
+				WarehouseID:       pembelianData.WarehouseID,
 				InvoiceNo:         inv.InvoiceNo,
 				InvoiceDate:       inv.InvoiceDate,
 				DueDate:           due,
