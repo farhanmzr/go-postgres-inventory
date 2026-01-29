@@ -10,6 +10,7 @@ type Piutang struct {
 	UserName string `gorm:"size:180;not null" json:"user_name"` // display
 
 	SalesRequestID uint `gorm:"not null;index" json:"sales_request_id"`
+	WarehouseID    uint `gorm:"index;not null" json:"warehouse_id"`
 
 	InvoiceNo   string    `gorm:"size:64;not null;index" json:"invoice_no"`
 	InvoiceDate time.Time `gorm:"not null" json:"invoice_date"`

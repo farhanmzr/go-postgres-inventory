@@ -219,6 +219,7 @@ func SalesReqApprove(c *gin.Context) {
 				SalesRequestID: pr.ID,
 				InvoiceNo:      inv.InvoiceNo,
 				InvoiceDate:    inv.InvoiceDate,
+				WarehouseID:    pr.WarehouseID,
 				DueDate:        due,
 				Total:          inv.GrandTotal,
 				TotalPaid:      0,
