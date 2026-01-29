@@ -241,3 +241,37 @@ func PiutangReceiptHistory(c *gin.Context) {
 
     c.JSON(http.StatusOK, gin.H{"data": rows})
 }
+
+func PiutangReceiptHistoryAdmin(c *gin.Context) {
+    // admin auth
+    if _, err := currentAdminID(c); err != nil {
+        c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "error": err.Error()})
+        return
+    }
+
+    id, _ := strconv.Atoi(c.Param("id"))
+
+    // cek piutang exist
+    var p models.Piutang
+    if err := config.DB.Select("id").First(&p, id).Error; err != nil {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
+            c.JSON(http.StatusNotFound, gin.H{"message": "Piutang tidak ditemukan"})
+            return
+        }
+        c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal ambil piutang", "error": err.Error()})
+        return
+    }
+
+    // ambil history penerimaan
+    var rows []models.PiutangReceipt
+    if err := config.DB.
+        Where("piutang_id = ?", p.ID).
+        Order("received_at ASC, id ASC").
+        Find(&rows).Error; err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal ambil history", "error": err.Error()})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"data": rows})
+}
+
