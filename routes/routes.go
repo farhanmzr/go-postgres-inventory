@@ -128,7 +128,7 @@ func SetupRoutes(r *gin.Engine) {
 			piutangAdmin := adminAuth.Group("/piutang")
 			{
 				piutangAdmin.GET("/", controllers.PiutangListAdmin)
-				piutangAdmin.GET("/:id/history", controllers.PiutangReceiptHistory)
+				piutangAdmin.GET("/:id/history", controllers.PiutangReceiptHistoryAdmin)
 			}
 
 			hutangAdmin := adminAuth.Group("/hutang")
