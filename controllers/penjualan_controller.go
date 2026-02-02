@@ -283,84 +283,134 @@ func SalesInvoiceDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Berhasil mengambil data Invoice", "data": inv})
 }
 
-func DeletePenjualanUser(c *gin.Context) {
-	// route user: RequireAuth + RequirePerm("DELETE_PENJUALAN") (atau apa pun di sistemmu)
-	_, err := currentUserID(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "error": err.Error()})
-		return
-	}
+func deletePenjualanCore(tx *gorm.DB, srID uint, actorID uint, checkOwner bool) error {
+    // lock SR + preload items
+    var sr models.SalesRequest
+    if err := tx.Clauses(clauseUpdateLock()).
+        Preload("Items").
+        First(&sr, srID).Error; err != nil {
+        return err
+    }
 
-	id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "id tidak valid"})
-		return
-	}
-	id := uint(id64)
+    if checkOwner && sr.CreatedByID != actorID {
+        return errors.New("forbidden")
+    }
 
-	err = config.DB.Transaction(func(tx *gorm.DB) error {
-		// lock row request
-		var sr models.SalesRequest
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Preload("Items").
-			First(&sr, id).Error; err != nil {
-			return err
-		}
+    // CASE 1: PENDING/REJECTED → belum ada efek stok & uang
+    if sr.Status == models.StatusPending || sr.Status == models.StatusRejected {
+        if err := tx.Where("sales_request_id = ?", sr.ID).
+            Delete(&models.SalesReqItem{}).Error; err != nil {
+            return err
+        }
+        return tx.Delete(&sr).Error
+    }
 
-		// // (opsional) kalau user hanya boleh delete miliknya
-		// if sr.CreatedByID != uid {
-		// 	return errors.New("forbidden")
-		// }
+    // CASE 2: APPROVED → reversal semua
+    if sr.Status != models.StatusApproved {
+        return fmt.Errorf("status tidak valid: %s", sr.Status)
+    }
 
-		// hanya boleh delete jika PENDING atau REJECTED
-		if sr.Status != models.StatusPending && sr.Status != models.StatusRejected {
-			return errors.New("tidak bisa delete: hanya PENDING/REJECTED")
-		}
+    // ambil invoice
+    var inv models.SalesInvoice
+    if err := tx.Where("sales_request_id = ?", sr.ID).First(&inv).Error; err != nil {
+        return err
+    }
 
-		// safety: kalau ada invoice, jangan delete
-		var invCnt int64
-		if err := tx.Model(&models.SalesInvoice{}).
-			Where("sales_request_id = ?", sr.ID).
-			Count(&invCnt).Error; err != nil {
-			return err
-		}
-		if invCnt > 0 {
-			return errors.New("tidak bisa delete: invoice sudah ada")
-		}
+    // 1) balikin stok (stok + qty)
+    for _, it := range sr.Items {
+        if err := tx.Model(&models.GudangBarang{}).
+            Where("barang_id = ? AND gudang_id = ?", it.BarangID, sr.WarehouseID).
+            UpdateColumn("stok", gorm.Expr("stok + ?", it.Qty)).Error; err != nil {
+            return err
+        }
+    }
 
-		// safety: kalau ada piutang (harusnya tidak ada kalau belum approve)
-		var piuCnt int64
-		if err := tx.Model(&models.Piutang{}).
-			Where("sales_request_id = ?", sr.ID).
-			Count(&piuCnt).Error; err != nil {
-			return err
-		}
-		if piuCnt > 0 {
-			return errors.New("tidak bisa delete: piutang sudah ada")
-		}
+    // 2) reversal uang/piutang
+    switch sr.Payment {
+    case models.PaymentCash, models.PaymentBank:
+        if sr.WalletID == nil || *sr.WalletID == 0 {
+            return errors.New("wallet_id kosong pada penjualan CASH/BANK")
+        }
+        // uang yang dulu masuk harus keluar sekarang
+        if err := applyWalletDelta(
+            tx,
+            *sr.WalletID,
+            sr.WarehouseID,
+            -inv.GrandTotal,
+            models.WalletTxSalesRefund,
+            "sales_refund",
+            sr.ID,
+            actorID,
+            "Reverse penjualan (hapus)",
+            time.Now().UTC(),
+        ); err != nil {
+            return err
+        }
 
-		// hapus items dulu (kalau relasi belum cascade)
-		if err := tx.Where("sales_request_id = ?", sr.ID).
-			Delete(&models.SalesReqItem{}).Error; err != nil {
-			return err
-		}
+    case models.PaymentCredit:
+        // cari piutang berdasarkan sales_request_id
+        var p models.Piutang
+        err := tx.Where("sales_request_id = ?", sr.ID).First(&p).Error
+        if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+            return err
+        }
+        if err == nil {
+            // reverse semua receipt dulu kalau ada
+            if p.TotalPaid > 0 {
+                if err := refundAllPiutangReceipts(tx, p.ID, sr.WarehouseID, actorID); err != nil {
+                    return err
+                }
+            }
+            // hapus piutang (items cascade)
+            if err := tx.Delete(&p).Error; err != nil {
+                return err
+            }
+        }
 
-		// hapus header
-		if err := tx.Delete(&sr).Error; err != nil {
-			return err
-		}
+    default:
+        return fmt.Errorf("payment tidak dikenal: %s", sr.Payment)
+    }
 
-		return nil
-	})
+    // 3) hapus invoice
+    if err := tx.Where("sales_request_id = ?", sr.ID).
+        Delete(&models.SalesInvoice{}).Error; err != nil {
+        return err
+    }
 
-	if err != nil {
-		code := http.StatusBadRequest
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			code = http.StatusNotFound
-		}
-		c.JSON(code, gin.H{"message": "Gagal menghapus Penjualan", "error": err.Error()})
-		return
-	}
+    // 4) hapus items SR
+    if err := tx.Where("sales_request_id = ?", sr.ID).
+        Delete(&models.SalesReqItem{}).Error; err != nil {
+        return err
+    }
 
-	c.JSON(http.StatusOK, gin.H{"message": "Berhasil menghapus Penjualan"})
+    // 5) hapus header SR
+    return tx.Delete(&sr).Error
 }
+
+func DeletePenjualanUser(c *gin.Context) {
+    uid, err := currentUserID(c)
+    if err != nil {
+        c.JSON(http.StatusUnauthorized, gin.H{"message":"Unauthorized", "error": err.Error()})
+        return
+    }
+
+    id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"message":"id tidak valid"})
+        return
+    }
+
+    err = config.DB.Transaction(func(tx *gorm.DB) error {
+        return deletePenjualanCore(tx, uint(id64), uid, true)
+    })
+
+    if err != nil {
+        code := http.StatusBadRequest
+        if errors.Is(err, gorm.ErrRecordNotFound) { code = http.StatusNotFound }
+        c.JSON(code, gin.H{"message":"Gagal hapus penjualan", "error": err.Error()})
+        return
+    }
+    c.JSON(http.StatusOK, gin.H{"message":"Penjualan berhasil dihapus (reversal stok & uang/piutang)"})
+}
+
+

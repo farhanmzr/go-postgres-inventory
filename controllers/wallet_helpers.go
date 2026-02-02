@@ -81,3 +81,66 @@ func applyWalletDelta(
 	}
 	return tx.Create(&log).Error
 }
+
+func refundAllHutangPayments(tx *gorm.DB, hutangID uint, gudangID uint, actorID uint) error {
+    var pays []models.HutangPayment
+    if err := tx.Where("hutang_id = ?", hutangID).Order("id ASC").Find(&pays).Error; err != nil {
+        return err
+    }
+
+    for _, hp := range pays {
+        if hp.Amount <= 0 { continue }
+
+        // refund: uang balik ke wallet (IN)
+        if err := applyWalletDelta(
+            tx,
+            hp.WalletID,
+            gudangID,
+            +hp.Amount,
+            models.WalletTxHutangRefund,
+            "hutang_refund",
+            hutangID,
+            actorID,
+            "Refund cicilan hutang (hapus transaksi)",
+            time.Now().UTC(),
+        ); err != nil {
+            return err
+        }
+    }
+
+    // hapus history pembayaran
+    return tx.Where("hutang_id = ?", hutangID).Delete(&models.HutangPayment{}).Error
+}
+
+
+func refundAllPiutangReceipts(tx *gorm.DB, piutangID uint, gudangID uint, actorID uint) error {
+    var rows []models.PiutangReceipt
+    if err := tx.Where("piutang_id = ?", piutangID).Order("id ASC").Find(&rows).Error; err != nil {
+        return err
+    }
+
+    for _, rc := range rows {
+        if rc.Amount <= 0 { continue }
+
+        // reverse receipt: uang yang dulu masuk harus keluar (OUT)
+        if err := applyWalletDelta(
+            tx,
+            rc.WalletID,
+            gudangID,
+            -rc.Amount,
+            models.WalletTxPiutangRefund,
+            "piutang_refund",
+            piutangID,
+            actorID,
+            "Reverse receipt piutang (hapus transaksi)",
+            time.Now().UTC(),
+        ); err != nil {
+            return err
+        }
+    }
+
+    // hapus history receipt
+    return tx.Where("piutang_id = ?", piutangID).Delete(&models.PiutangReceipt{}).Error
+}
+
+

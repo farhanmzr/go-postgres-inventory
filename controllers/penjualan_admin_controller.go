@@ -311,69 +311,27 @@ func SalesReqReject(c *gin.Context) {
 }
 
 func DeletePenjualanAdmin(c *gin.Context) {
-	if _, err := currentAdminID(c); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "error": err.Error()})
-		return
-	}
+    adminID, err := currentAdminID(c)
+    if err != nil {
+        c.JSON(http.StatusUnauthorized, gin.H{"message":"Unauthorized", "error": err.Error()})
+        return
+    }
 
-	id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "id tidak valid"})
-		return
-	}
-	id := uint(id64)
+    id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"message":"id tidak valid"})
+        return
+    }
 
-	err = config.DB.Transaction(func(tx *gorm.DB) error {
-		var sr models.SalesRequest
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			First(&sr, id).Error; err != nil {
-			return err
-		}
+    err = config.DB.Transaction(func(tx *gorm.DB) error {
+        return deletePenjualanCore(tx, uint(id64), adminID, false)
+    })
 
-		if sr.Status != models.StatusPending && sr.Status != models.StatusRejected {
-			return errors.New("tidak bisa delete: hanya PENDING/REJECTED")
-		}
-
-		var invCnt int64
-		if err := tx.Model(&models.SalesInvoice{}).
-			Where("sales_request_id = ?", sr.ID).
-			Count(&invCnt).Error; err != nil {
-			return err
-		}
-		if invCnt > 0 {
-			return errors.New("tidak bisa delete: invoice sudah ada")
-		}
-
-		var piuCnt int64
-		if err := tx.Model(&models.Piutang{}).
-			Where("sales_request_id = ?", sr.ID).
-			Count(&piuCnt).Error; err != nil {
-			return err
-		}
-		if piuCnt > 0 {
-			return errors.New("tidak bisa delete: piutang sudah ada")
-		}
-
-		if err := tx.Where("sales_request_id = ?", sr.ID).
-			Delete(&models.SalesReqItem{}).Error; err != nil {
-			return err
-		}
-
-		if err := tx.Delete(&sr).Error; err != nil {
-			return err
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		code := http.StatusBadRequest
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			code = http.StatusNotFound
-		}
-		c.JSON(code, gin.H{"message": "Gagal menghapus Penjualan", "error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Berhasil menghapus Penjualan"})
+    if err != nil {
+        code := http.StatusBadRequest
+        if errors.Is(err, gorm.ErrRecordNotFound) { code = http.StatusNotFound }
+        c.JSON(code, gin.H{"message":"Gagal hapus penjualan (admin)", "error": err.Error()})
+        return
+    }
+    c.JSON(http.StatusOK, gin.H{"message":"Penjualan berhasil dihapus (admin) (reversal stok & uang/piutang)"})
 }

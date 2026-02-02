@@ -10,6 +10,11 @@ const (
 	WalletTxHutangPay      WalletTxType = "HUTANG_PAY"       // bayar hutang -> OUT
 	WalletTxPiutangReceive WalletTxType = "PIUTANG_RECEIVE"  // terima piutang -> IN
 	WalletTxAdjust         WalletTxType = "ADJUST"           // koreksi manual
+
+	WalletTxPurchaseRefund  WalletTxType = "PURCHASE_REFUND"
+    WalletTxSalesRefund     WalletTxType = "SALES_REFUND"
+    WalletTxHutangRefund    WalletTxType = "HUTANG_REFUND"
+    WalletTxPiutangRefund   WalletTxType = "PIUTANG_REFUND"
 )
 
 type WalletTransaction struct {
