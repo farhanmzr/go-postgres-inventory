@@ -215,3 +215,80 @@ func DeleteUsageAdmin(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Berhasil menghapus pemakaian"})
 }
+
+func UsageDeleteAdmin(c *gin.Context) {
+	if _, err := currentAdminID(c); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "error": err.Error()})
+		return
+	}
+
+	id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "id tidak valid"})
+		return
+	}
+	id := uint(id64)
+
+	err = config.DB.Transaction(func(tx *gorm.DB) error {
+		// 1) lock header
+		var hdr models.UsageRequest
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			First(&hdr, id).Error; err != nil {
+			return err
+		}
+
+		// 3) lock items
+		var items []models.UsageItem
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("usage_request_id = ?", hdr.ID).
+			Find(&items).Error; err != nil {
+			return err
+		}
+
+		// 4) kalau ada yang sudah apply stok, balikin stoknya
+		//    stok gudang = gudang_barangs.stok + qty
+		for _, it := range items {
+			if it.StockApplied {
+				// lock row gudang_barang
+				var gb models.GudangBarang
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+					Where("gudang_id = ? AND barang_id = ?", hdr.WarehouseID, it.BarangID).
+					First(&gb).Error; err != nil {
+					return err
+				}
+
+				if err := tx.Model(&models.GudangBarang{}).
+					Where("id = ?", gb.ID).
+					UpdateColumn("stok", gorm.Expr("stok + ?", it.Qty)).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		// 5) delete items (opsional kalau cascade)
+		if err := tx.Where("usage_request_id = ?", hdr.ID).
+			Delete(&models.UsageItem{}).Error; err != nil {
+			return err
+		}
+
+		// 6) delete header
+		if err := tx.Delete(&models.UsageRequest{}, hdr.ID).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		code := http.StatusBadRequest
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			code = http.StatusNotFound
+		} else if err.Error() == "forbidden" {
+			code = http.StatusForbidden
+		}
+		c.JSON(code, gin.H{"message": "Gagal hapus pemakaian", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Pemakaian berhasil dihapus (stok direstore jika sudah terpakai)"})
+}

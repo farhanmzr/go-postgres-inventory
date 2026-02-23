@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"go-postgres-inventory/config"
 	"go-postgres-inventory/models"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type UsageCreateInput struct {
@@ -35,18 +37,6 @@ func UsageCreate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "payload tidak valid", "error": err.Error()})
 		return
 	}
-
-	// // validasi tanggal tidak ke depan (gunakan UTC agar konsisten)
-	// loc, _ := time.LoadLocation("Asia/Jakarta")
-	// // hari ini (tanpa jam)
-	// today := time.Now().In(loc).Truncate(24 * time.Hour)
-	// // tanggal request (tanpa jam)
-	// reqDate := in.UsageDate.In(loc).Truncate(24 * time.Hour)
-	// // kalau tanggal request > hari ini -> ke depan
-	// if reqDate.After(today) {
-	// 	c.JSON(http.StatusBadRequest, gin.H{"message": "Tanggal pembelian tidak boleh ke depan"})
-	// 	return
-	// }
 
 	// ambil user_id dari context (normalize)
 	rawID, ok := c.Get("user_id")
@@ -185,4 +175,87 @@ func UsageMyList(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": rows})
+}
+
+func UsageDeleteUser(c *gin.Context) {
+	uid, err := currentUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "error": err.Error()})
+		return
+	}
+
+	id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id64 == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "id tidak valid"})
+		return
+	}
+	id := uint(id64)
+
+	err = config.DB.Transaction(func(tx *gorm.DB) error {
+		// 1) lock header
+		var hdr models.UsageRequest
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			First(&hdr, id).Error; err != nil {
+			return err
+		}
+
+		// 2) cek owner
+		if hdr.CreatedByID != uid {
+			return errors.New("forbidden")
+		}
+
+		// 3) lock items
+		var items []models.UsageItem
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("usage_request_id = ?", hdr.ID).
+			Find(&items).Error; err != nil {
+			return err
+		}
+
+		// 4) kalau ada yang sudah apply stok, balikin stoknya
+		//    stok gudang = gudang_barangs.stok + qty
+		for _, it := range items {
+			if it.StockApplied {
+				// lock row gudang_barang
+				var gb models.GudangBarang
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+					Where("gudang_id = ? AND barang_id = ?", hdr.WarehouseID, it.BarangID).
+					First(&gb).Error; err != nil {
+					return err
+				}
+
+				if err := tx.Model(&models.GudangBarang{}).
+					Where("id = ?", gb.ID).
+					UpdateColumn("stok", gorm.Expr("stok + ?", it.Qty)).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		// 5) delete items (opsional kalau cascade)
+		if err := tx.Where("usage_request_id = ?", hdr.ID).
+			Delete(&models.UsageItem{}).Error; err != nil {
+			return err
+		}
+
+		// 6) delete header
+		if err := tx.Delete(&models.UsageRequest{}, hdr.ID).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		code := http.StatusBadRequest
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			code = http.StatusNotFound
+		} else if err.Error() == "forbidden" {
+			code = http.StatusForbidden
+		}
+		c.JSON(code, gin.H{"message": "Gagal hapus pemakaian", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Pemakaian berhasil dihapus (stok direstore jika sudah terpakai)"})
 }

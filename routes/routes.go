@@ -171,6 +171,7 @@ func SetupRoutes(r *gin.Engine) {
 				{
 					pemakaian.GET("/", controllers.UsageMyList)
 					pemakaian.POST("/", controllers.UsageCreate)
+					pemakaian.DELETE("/:id", middlewares.RequirePerm("DELETE_PEMAKAIAN"), controllers.UsageDeleteUser)
 				}
 
 				permintaan := userAuth.Group("/permintaan", middlewares.RequirePerm("PERMINTAAN"))
