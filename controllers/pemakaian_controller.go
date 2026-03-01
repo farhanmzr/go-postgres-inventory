@@ -91,7 +91,9 @@ func UsageCreate(c *gin.Context) {
 	}
 
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
+
 		items := make([]models.UsageItem, 0, len(in.Items))
+
 		for _, it := range in.Items {
 			items = append(items, models.UsageItem{
 				BarangID:   it.BarangID,
@@ -100,6 +102,19 @@ func UsageCreate(c *gin.Context) {
 				ItemStatus: models.ItemPending,
 				Note:       it.Note,
 			})
+		}
+
+		for _, it := range in.Items {
+			// lock row stok supaya aman dari race
+			var gb models.GudangBarang
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				Where("barang_id = ? AND gudang_id = ?", it.BarangID, in.WarehouseID).
+				First(&gb).Error; err != nil {
+				return err
+			}
+			if int64(gb.Stok) < it.Qty {
+				return fmt.Errorf("Stok tidak cukup untuk barang_id=%d (stok=%d, minta=%d)", it.BarangID, gb.Stok, it.Qty)
+			}
 		}
 
 		u := models.UsageRequest{
