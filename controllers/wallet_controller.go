@@ -323,13 +323,6 @@ func DeleteWalletTransaction(c *gin.Context) {
 		return
 	}
 
-	gid64, err := strconv.ParseUint(c.Param("gudang_id"), 10, 64)
-	if err != nil {
-		c.JSON(400, gin.H{"message": "gudang_id tidak valid"})
-		return
-	}
-	gudangID := uint(gid64)
-
 	wid64, err := strconv.ParseUint(c.Param("wallet_id"), 10, 64)
 	if err != nil {
 		c.JSON(400, gin.H{"message": "wallet_id tidak valid"})
@@ -347,7 +340,7 @@ func DeleteWalletTransaction(c *gin.Context) {
 	err = config.DB.Transaction(func(tx *gorm.DB) error {
 		var wallet models.WarehouseWallet
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("id = ? AND gudang_id = ?", walletID, gudangID).
+			Where("id = ?", walletID).
 			First(&wallet).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return errors.New("wallet tidak ditemukan")
@@ -357,7 +350,7 @@ func DeleteWalletTransaction(c *gin.Context) {
 
 		var wt models.WalletTransaction
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("id = ? AND wallet_id = ? AND gudang_id = ?", transactionID, walletID, gudangID).
+			Where("id = ? AND wallet_id = ?", transactionID, walletID).
 			First(&wt).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return errors.New("transaksi wallet tidak ditemukan")
@@ -365,28 +358,22 @@ func DeleteWalletTransaction(c *gin.Context) {
 			return err
 		}
 
-		// hanya boleh hapus transaksi manual
 		if wt.Type != models.WalletTxAdjust {
-			return errors.New("Hanya transaksi manual yang bisa dihapus dari mutasi wallet")
+			return errors.New("hanya transaksi manual yang bisa dihapus dari mutasi wallet")
 		}
 
 		if wt.RefType != "manual_income" && wt.RefType != "manual_expense" {
-			return errors.New("Transaksi ini bukan manual income/expense")
+			return errors.New("transaksi ini bukan manual income/expense")
 		}
 
-		// reverse saldo
 		switch wt.Direction {
 		case "IN":
-			// manual income dulu menambah saldo, jadi saat dihapus saldo harus dikurangi
 			if wallet.Balance < wt.Amount {
 				return errors.New("saldo wallet tidak cukup untuk menghapus transaksi ini")
 			}
 			wallet.Balance -= wt.Amount
-
 		case "OUT":
-			// manual expense dulu mengurangi saldo, jadi saat dihapus saldo harus ditambah kembali
 			wallet.Balance += wt.Amount
-
 		default:
 			return errors.New("direction transaksi tidak valid")
 		}
@@ -415,13 +402,13 @@ func DeleteWalletTransaction(c *gin.Context) {
 		case "hanya transaksi manual yang bisa dihapus dari mutasi wallet":
 			c.JSON(400, gin.H{"message": err.Error()})
 			return
+		case "transaksi ini bukan manual income/expense":
+			c.JSON(400, gin.H{"message": err.Error()})
+			return
 		case "saldo wallet tidak cukup untuk menghapus transaksi ini":
 			c.JSON(400, gin.H{"message": err.Error()})
 			return
 		case "direction transaksi tidak valid":
-			c.JSON(400, gin.H{"message": err.Error()})
-			return
-		case "transaksi ini bukan manual income/expense":
 			c.JSON(400, gin.H{"message": err.Error()})
 			return
 		default:
