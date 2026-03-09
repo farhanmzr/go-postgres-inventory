@@ -147,6 +147,9 @@ func SetupRoutes(r *gin.Engine) {
 				wallet.GET("/:wallet_id/tx", controllers.ListWalletTransactions)
 				wallet.POST("/:wallet_id/income", controllers.WalletManualIncome)
 				wallet.POST("/:wallet_id/expense", controllers.WalletManualExpense)
+				// delete
+				wallet.DELETE("/gudang/:gudang_id/:wallet_id", controllers.DeleteWallet)
+				wallet.DELETE("/:wallet_id/tx/:transaction_id", controllers.DeleteWalletTransaction)
 			}
 
 		}
