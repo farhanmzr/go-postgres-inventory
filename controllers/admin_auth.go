@@ -616,7 +616,7 @@ func AdminUpdateUser(c *gin.Context) {
 	var in AdminUpdateUserInput
 	if err := c.ShouldBindJSON(&in); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Payload tidak valid",
+			"error":  "Payload tidak valid",
 			"detail": err.Error(),
 		})
 		return
@@ -631,7 +631,6 @@ func AdminUpdateUser(c *gin.Context) {
 			return
 		}
 
-		// cek unik username, kecuali user itu sendiri
 		var exists int64
 		config.DB.Model(&models.User{}).
 			Where("LOWER(username) = LOWER(?) AND id <> ?", username, user.ID).
@@ -682,19 +681,72 @@ func AdminUpdateUser(c *gin.Context) {
 
 	if err := config.DB.Model(&user).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Gagal mengupdate user",
+			"error":  "Gagal mengupdate user",
 			"detail": err.Error(),
 		})
 		return
 	}
 
+	// reload user terbaru
 	if err := config.DB.First(&user, user.ID).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat ulang data user"})
 		return
 	}
 
+	// build dto lengkap termasuk permissions
+	item, err := buildUserListItem(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil permissions user"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Data user berhasil diperbarui",
-		"data":    user,
+		"data":    item,
 	})
+}
+
+func buildUserListItem(user models.User) (UserListItem, error) {
+	type Row struct {
+		Code string
+	}
+
+	var rows []Row
+	if err := config.DB.Raw(`
+		SELECT p.code AS code
+		FROM user_permissions up
+		JOIN permissions p ON p.id = up.permission_id
+		WHERE up.user_id = ?
+		ORDER BY p.code ASC
+	`, user.ID).Scan(&rows).Error; err != nil {
+		return UserListItem{}, err
+	}
+
+	perms := make([]string, 0, len(rows))
+	for _, r := range rows {
+		perms = append(perms, r.Code)
+	}
+
+	var last *string
+	if user.LastLoginAt != nil {
+		iso := user.LastLoginAt.UTC().Format(time.RFC3339)
+		last = &iso
+	}
+
+	return UserListItem{
+		ID:           user.ID,
+		Username:     user.Username,
+		FullName:     user.FullName,
+		UserCode:     user.UserCode,
+		Position:     user.Position,
+		WorkLocation: user.WorkLocation,
+		Phone:        user.Phone,
+		Address:      user.Address,
+		AvatarURL:    user.AvatarURL,
+		IsActive:     user.IsActive,
+		LastLoginAt:  last,
+		CreatedAt:    user.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:    user.UpdatedAt.UTC().Format(time.RFC3339),
+		Permissions:  perms,
+	}, nil
 }

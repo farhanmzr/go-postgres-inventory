@@ -18,3 +18,20 @@ type User struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 }
+
+type UserListItem struct {
+	ID           uint     `json:"id"`
+	Username     string   `json:"username"`
+	FullName     string   `json:"full_name"`
+	UserCode     string   `json:"user_code"`
+	Position     string   `json:"position"`
+	WorkLocation string   `json:"work_location"`
+	Phone        string   `json:"phone"`
+	Address      string   `json:"address"`
+	AvatarURL    string   `json:"avatar_url"`
+	IsActive     bool     `json:"is_active"`
+	LastLoginAt  *string  `json:"last_login_at,omitempty"`
+	CreatedAt    string   `json:"created_at"`
+	UpdatedAt    string   `json:"updated_at"`
+	Permissions  []string `json:"permissions"`
+}
