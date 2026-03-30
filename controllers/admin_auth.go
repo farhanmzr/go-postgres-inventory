@@ -534,3 +534,167 @@ func AdminListPermissions(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"data": perms})
 }
+
+// Admin: hapus user beserta relasi yang terkait
+func AdminDeleteUser(c *gin.Context) {
+	userIDParam := c.Param("userID")
+	userID, err := strconv.ParseUint(userIDParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "userID tidak valid"})
+		return
+	}
+
+	var user models.User
+	if err := config.DB.First(&user, uint(userID)).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data user"})
+		return
+	}
+
+	err = config.DB.Transaction(func(tx *gorm.DB) error {
+		// 1) hapus relasi user_permissions dulu
+		if err := tx.Where("user_id = ?", user.ID).Delete(&models.UserPermission{}).Error; err != nil {
+			return err
+		}
+
+		// 2) hapus user
+		if err := tx.Delete(&user).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Gagal menghapus user",
+			"detail": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "User berhasil dihapus",
+		"id":      user.ID,
+		"username": user.Username,
+	})
+}
+
+type AdminUpdateUserInput struct {
+	Username     *string `json:"username,omitempty"`
+	FullName     *string `json:"full_name,omitempty"`
+	UserCode     *string `json:"user_code,omitempty"`
+	Position     *string `json:"position,omitempty"`
+	WorkLocation *string `json:"work_location,omitempty"`
+	Phone        *string `json:"phone,omitempty"`
+	Address      *string `json:"address,omitempty"`
+	IsActive     *bool   `json:"is_active,omitempty"`
+}
+
+// Admin: update data user (tanpa password, tanpa avatar, tanpa permissions)
+func AdminUpdateUser(c *gin.Context) {
+	userIDParam := c.Param("userID")
+	userID, err := strconv.ParseUint(userIDParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "userID tidak valid"})
+		return
+	}
+
+	var user models.User
+	if err := config.DB.First(&user, uint(userID)).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data user"})
+		return
+	}
+
+	var in AdminUpdateUserInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Payload tidak valid",
+			"detail": err.Error(),
+		})
+		return
+	}
+
+	updates := map[string]any{}
+
+	if in.Username != nil {
+		username := strings.TrimSpace(*in.Username)
+		if username == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Username tidak boleh kosong"})
+			return
+		}
+
+		// cek unik username, kecuali user itu sendiri
+		var exists int64
+		config.DB.Model(&models.User{}).
+			Where("LOWER(username) = LOWER(?) AND id <> ?", username, user.ID).
+			Count(&exists)
+
+		if exists > 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Username sudah dipakai"})
+			return
+		}
+
+		updates["username"] = username
+	}
+
+	if in.FullName != nil {
+		fullName := strings.TrimSpace(*in.FullName)
+		if fullName == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Nama lengkap tidak boleh kosong"})
+			return
+		}
+		updates["full_name"] = fullName
+	}
+
+	if in.UserCode != nil {
+		updates["user_code"] = strings.TrimSpace(*in.UserCode)
+	}
+	if in.Position != nil {
+		updates["position"] = strings.TrimSpace(*in.Position)
+	}
+	if in.WorkLocation != nil {
+		updates["work_location"] = strings.TrimSpace(*in.WorkLocation)
+	}
+	if in.Phone != nil {
+		updates["phone"] = strings.TrimSpace(*in.Phone)
+	}
+	if in.Address != nil {
+		updates["address"] = strings.TrimSpace(*in.Address)
+	}
+	if in.IsActive != nil {
+		updates["is_active"] = *in.IsActive
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tidak ada data yang diubah"})
+		return
+	}
+
+	updates["updated_at"] = time.Now()
+
+	if err := config.DB.Model(&user).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Gagal mengupdate user",
+			"detail": err.Error(),
+		})
+		return
+	}
+
+	if err := config.DB.First(&user, user.ID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat ulang data user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Data user berhasil diperbarui",
+		"data":    user,
+	})
+}

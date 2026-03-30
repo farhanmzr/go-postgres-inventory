@@ -31,6 +31,8 @@ func SetupRoutes(r *gin.Engine) {
 			adminAuth.POST("/users", controllers.AdminCreateUser) // gabungan
 			adminAuth.PUT("/users/:userID/permissions", controllers.AdminSetUserPermissions)
 			adminAuth.GET("/permissions", controllers.AdminListPermissions)
+			adminAuth.DELETE("/users/:userID", controllers.AdminDeleteUser)
+			adminAuth.PUT("/users/:userID", controllers.AdminUpdateUser)
 
 			// Permintaan
 			adminAuth.GET("/permintaan", controllers.AdminGetAllPermintaan)
