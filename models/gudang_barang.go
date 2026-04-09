@@ -11,7 +11,7 @@ type GudangBarang struct {
 	Barang   Barang `gorm:"foreignKey:BarangID" json:"barang"`
 
 	LokasiSusun string  `json:"lokasi_susun"`
-	HargaBeli   float64 `json:"harga_beli"`
-	HargaJual   float64 `json:"harga_jual"`
+	HargaBeli   int64 `json:"harga_beli"`
+	HargaJual   int64 `json:"harga_jual"`
 	Stok        int     `json:"stok"`
 }

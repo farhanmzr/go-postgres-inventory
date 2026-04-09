@@ -5,7 +5,6 @@ import (
 	"errors"
 	"go-postgres-inventory/config"
 	"go-postgres-inventory/models"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -113,7 +112,7 @@ func SalesReqApprove(c *gin.Context) {
 				return err
 			}
 
-			cost := int64(math.Round(gb.HargaBeli)) // asumsi float64 → int64
+			cost := gb.HargaBeli
 
 			netPrice := it.SellPrice
 			netLine := netPrice * it.Qty

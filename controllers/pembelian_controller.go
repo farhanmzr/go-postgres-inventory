@@ -137,8 +137,8 @@ func CreatePembelian(c *gin.Context) {
 			}
 
 			// 2) update harga beli + harga jual (10%)
-			buy := float64(it.BuyPrice)
-			sell := buy * 1.10
+			buy := it.BuyPrice
+			sell := buy + (buy * 10 / 100)
 
 			if err := tx.Model(&models.GudangBarang{}).
 				Where("barang_id = ? AND gudang_id = ?", it.BarangID, pembelianData.WarehouseID).
@@ -361,121 +361,122 @@ func PurchaseInvoiceDetail(c *gin.Context) {
 }
 
 func deletePembelianCore(tx *gorm.DB, prID uint, actorID uint, checkOwner bool) error {
-    // lock PR + preload items
-    var pr models.PurchaseRequest
-    if err := tx.Clauses(clauseUpdateLock()).
-        Preload("Items").
-        First(&pr, prID).Error; err != nil {
-        return err
-    }
+	// lock PR + preload items
+	var pr models.PurchaseRequest
+	if err := tx.Clauses(clauseUpdateLock()).
+		Preload("Items").
+		First(&pr, prID).Error; err != nil {
+		return err
+	}
 
-    if checkOwner && pr.CreatedByID != actorID {
-        return errors.New("forbidden")
-    }
+	if checkOwner && pr.CreatedByID != actorID {
+		return errors.New("forbidden")
+	}
 
-    // ambil invoice untuk total
-    var inv models.PurchaseInvoice
-    if err := tx.Where("purchase_request_id = ?", pr.ID).First(&inv).Error; err != nil {
-        return err
-    }
+	// ambil invoice untuk total
+	var inv models.PurchaseInvoice
+	if err := tx.Where("purchase_request_id = ?", pr.ID).First(&inv).Error; err != nil {
+		return err
+	}
 
-    // 1) revert stok (stok - qty pembelian)
-    for _, it := range pr.Items {
-        if err := tx.Model(&models.GudangBarang{}).
-            Where("barang_id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
-            UpdateColumn("stok", gorm.Expr("stok - ?", it.Qty)).Error; err != nil {
-            return err
-        }
-    }
+	// 1) revert stok (stok - qty pembelian)
+	for _, it := range pr.Items {
+		if err := tx.Model(&models.GudangBarang{}).
+			Where("barang_id = ? AND gudang_id = ?", it.BarangID, pr.WarehouseID).
+			UpdateColumn("stok", gorm.Expr("stok - ?", it.Qty)).Error; err != nil {
+			return err
+		}
+	}
 
-    // 2) reversal uang / hutang sesuai payment
-    switch pr.Payment {
-    case models.PaymentCash, models.PaymentBank:
-        if pr.WalletID == nil || *pr.WalletID == 0 {
-            return errors.New("wallet_id kosong pada pembelian CASH/BANK")
-        }
+	// 2) reversal uang / hutang sesuai payment
+	switch pr.Payment {
+	case models.PaymentCash, models.PaymentBank:
+		if pr.WalletID == nil || *pr.WalletID == 0 {
+			return errors.New("wallet_id kosong pada pembelian CASH/BANK")
+		}
 
-        // refund uang: IN sebesar total invoice
-        if err := applyWalletDelta(
-            tx,
-            *pr.WalletID,
-            pr.WarehouseID,
-            +inv.GrandTotal,
-            models.WalletTxPurchaseRefund,
-            "purchase_refund",
-            pr.ID,
-            actorID,
-            "Refund pembelian (hapus)",
-            time.Now().UTC(),
-        ); err != nil {
-            return err
-        }
+		// refund uang: IN sebesar total invoice
+		if err := applyWalletDelta(
+			tx,
+			*pr.WalletID,
+			pr.WarehouseID,
+			+inv.GrandTotal,
+			models.WalletTxPurchaseRefund,
+			"purchase_refund",
+			pr.ID,
+			actorID,
+			"Refund pembelian (hapus)",
+			time.Now().UTC(),
+		); err != nil {
+			return err
+		}
 
-    case models.PaymentCredit:
-        // cari hutang berdasarkan purchase_request_id
-        var h models.Hutang
-        err := tx.Where("purchase_request_id = ?", pr.ID).First(&h).Error
-        if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-            return err
-        }
+	case models.PaymentCredit:
+		// cari hutang berdasarkan purchase_request_id
+		var h models.Hutang
+		err := tx.Where("purchase_request_id = ?", pr.ID).First(&h).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
 
-        if err == nil {
-            // refund semua cicilan dulu (kalau ada)
-            if h.TotalPaid > 0 {
-                if err := refundAllHutangPayments(tx, h.ID, pr.WarehouseID, actorID); err != nil {
-                    return err
-                }
-            }
+		if err == nil {
+			// refund semua cicilan dulu (kalau ada)
+			if h.TotalPaid > 0 {
+				if err := refundAllHutangPayments(tx, h.ID, pr.WarehouseID, actorID); err != nil {
+					return err
+				}
+			}
 
-            // hapus hutang (items cascade)
-            if err := tx.Delete(&h).Error; err != nil {
-                return err
-            }
-        }
+			// hapus hutang (items cascade)
+			if err := tx.Delete(&h).Error; err != nil {
+				return err
+			}
+		}
 
-    default:
-        return fmt.Errorf("payment tidak dikenal: %s", pr.Payment)
-    }
+	default:
+		return fmt.Errorf("payment tidak dikenal: %s", pr.Payment)
+	}
 
-    // 3) hapus invoice
-    if err := tx.Where("purchase_request_id = ?", pr.ID).
-        Delete(&models.PurchaseInvoice{}).Error; err != nil {
-        return err
-    }
+	// 3) hapus invoice
+	if err := tx.Where("purchase_request_id = ?", pr.ID).
+		Delete(&models.PurchaseInvoice{}).Error; err != nil {
+		return err
+	}
 
-    // 4) hapus items PR
-    if err := tx.Where("purchase_request_id = ?", pr.ID).
-        Delete(&models.PurchaseReqItem{}).Error; err != nil {
-        return err
-    }
+	// 4) hapus items PR
+	if err := tx.Where("purchase_request_id = ?", pr.ID).
+		Delete(&models.PurchaseReqItem{}).Error; err != nil {
+		return err
+	}
 
-    // 5) hapus header PR
-    return tx.Delete(&pr).Error
+	// 5) hapus header PR
+	return tx.Delete(&pr).Error
 }
 
 func DeletePembelianUser(c *gin.Context) {
-    uid, err := currentUserID(c)
-    if err != nil {
-        c.JSON(http.StatusUnauthorized, gin.H{"message":"Unauthorized", "error": err.Error()})
-        return
-    }
+	uid, err := currentUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "error": err.Error()})
+		return
+	}
 
-    id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
-    if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"message":"id tidak valid"})
-        return
-    }
+	id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "id tidak valid"})
+		return
+	}
 
-    err = config.DB.Transaction(func(tx *gorm.DB) error {
-        return deletePembelianCore(tx, uint(id64), uid, true) // ✅ cek owner
-    })
+	err = config.DB.Transaction(func(tx *gorm.DB) error {
+		return deletePembelianCore(tx, uint(id64), uid, true) // ✅ cek owner
+	})
 
-    if err != nil {
-        code := http.StatusBadRequest
-        if errors.Is(err, gorm.ErrRecordNotFound) { code = http.StatusNotFound }
-        c.JSON(code, gin.H{"message":"Gagal hapus pembelian", "error": err.Error()})
-        return
-    }
-    c.JSON(http.StatusOK, gin.H{"message":"Pembelian berhasil dihapus (reversal stok & uang)"})
+	if err != nil {
+		code := http.StatusBadRequest
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			code = http.StatusNotFound
+		}
+		c.JSON(code, gin.H{"message": "Gagal hapus pembelian", "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Pembelian berhasil dihapus (reversal stok & uang)"})
 }
-
